@@ -14,9 +14,16 @@ col3 <- colorspace::qualitative_hcl(3, alpha = 0.5)
 
 # FUNs --------------------------------------------------------------------
 
-pY0 <- \(y) pchisq(y, df = 4)
-dY0 <- \(y) dchisq(y, df = 4)
-qY0 <- \(p) qchisq(p, df = 4)
+pY0 <- \(y) 0.5 * pnorm(y, mean = -2) + 0.5 * pnorm(y, mean = 2)
+# 0.5 * pchisq(y, df = 3) + 0.5 * pchisq(y, df = 6)
+dY0 <- \(y) 0.5 * dnorm(y, mean = -2) + 0.5 * dnorm(y, mean = 2)
+# 0.5 * dchisq(y, df = 3) + 0.5 * dchisq(y, df = 6)
+qY0 <- Vectorize(\(p) {
+  ret <- try(uniroot(\(y) pY0(y) - p, interval = c(-10, 10))$root)
+  if (inherits(ret, "try-error")) NA else ret
+}) # qchisq(p, df = 4)
+
+ranY <- qY0(c(0.001, 0.999))
 
 pZ <- plogis
 dZ <- dlogis
@@ -36,7 +43,7 @@ dY <- \(y, x) dZ((1 / sigma(x)) * h0(y) - beta(x)) * hp(y)
 # Plot --------------------------------------------------------------------
 
 z <- seq(-4, 4, length.out = 1e3)
-y <- seq(0, 12, length.out = 1e3)
+y <- seq(ranY[1], ranY[2], length.out = 1e3)
 dz <- dZ(z)
 x <- c(-0.5, 0, 0.5)
 Y <- sapply(x, \(tx) g(z, tx))
@@ -52,8 +59,8 @@ plot.new()
 legend("topleft", legend = x, col = col3, bty = "n", lwd = 1, title = "x", cex = 1.5)
 matplot(z, Y, type = "l", axes = FALSE, lty = 1, col = col3)
 text(0, par("usr")[4] - 0.75, "Z", cex = 1.5)
-text(par("usr")[2] - 0.5, 5, "Y | X = x", cex = 1.5, srt = -90, xpd = TRUE)
-text(0, 1.75, "g(.|x)", cex = 1.5)
+text(par("usr")[2] - 0.75, 0, "Y | X = x", cex = 1.5, srt = -90, xpd = TRUE)
+text(0, par("usr")[1] + 0.75, "g(.|x)", cex = 1.5)
 box()
 matplot(dy, y, type = "l", axes = FALSE, lty = 1, col = col3)
 # box()
@@ -64,7 +71,8 @@ pdf("samples.pdf", width = 5.5, height = 5.5)
 set.seed(8)
 n <- 1e3
 smpl <- sapply(x, \(tx) g(rlogis(n), x = tx))
-boxplot(smpl, col = col3, axes = FALSE, xlab = "x", ylab = "y", pch = 20, outcol = col3)
+# boxplot(smpl, col = col3, axes = FALSE, xlab = "x", ylab = "y", pch = 20, outcol = col3)
+beeswarm::beeswarm(as.data.frame(smpl), col = col3, axes = FALSE, xlab = "x", ylab = "y", pch = 20, cex = 0.5)
 box()
 axis(1, at = 1:3, labels = x)
 axis(2, las = 1)
