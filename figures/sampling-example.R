@@ -3,13 +3,7 @@
 
 # Dependencies ------------------------------------------------------------
 
-library(tidyverse)
-library(ggpubr)
-library(ggside)
-
-theme_set(theme_bw() + theme(
-  legend.position = "top", text = element_text(size = 13.5)))
-
+library("tidyverse")
 col3 <- colorspace::qualitative_hcl(3, alpha = 0.5)
 
 # FUNs --------------------------------------------------------------------
@@ -33,7 +27,7 @@ rZ <- rlogis
 sigma <- \(x) sqrt(exp(x))
 beta <- \(x) exp(1 - exp(-x)) - 1
 
-g <- \(z, x = 0) qY0(pZ(z + beta(x)))
+g <- \(z, x = 0) qY0(pZ(sigma(x) * z + beta(x)))
 h0 <- \(y) qZ(pY0(y))
 hp <- \(y) (1 / dZ(qZ(pY0(y)))) * dY0(y)
 
