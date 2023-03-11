@@ -42,13 +42,11 @@ nonneg_tanh_network <- function(size) mlp_with_default_layer(
 ### Tensor-product network
 tensorproduct_network <- function(inpY, inpX)
   deepregression::tf_row_tensor(inpY, inpX) %>% 
-  layer_dense(units = 1,
-              kernel_constraint = 
-                keras$constraints$non_neg(),
-              kernel_initializer = 
-                keras$initializers$random_uniform(minval = 0, 
-                                                  maxval = 1),
-              use_bias = FALSE)
+  deeptrafo:::layer_mono_multi(units = 1, 
+                              dim_bsp = inpY$shape[[2]]*inpX$shape[[2]],
+                              trafo = deeptrafo:::mono_trafo_multi, 
+                              kernel_regularizer = NULL, 
+                              trainable = TRUE)()
 
 ### Monotonic NN with interactions
 interconnected_network <- function(inpY, inpX, 
