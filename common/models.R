@@ -1,35 +1,109 @@
 ############################# Loading libraries #############################
 library(deeptrafo)
 library(Metrics)
+devtools::load_all("../neat")
 
 ############################# Architectures #############################
-get_deep_mod <- function(architecture = c("a", "b", "c", "d")){
+get_deep_mod <- function(architecture = c("a", "b", "c", "d"),
+                         with_head = TRUE){
+  
+  if(is.null(architecture)) return(NULL)
   
   architecture <- match.arg(architecture)
-  deep_mod <- switch(architecture,
-                     a = function(x) x %>% 
-                       layer_dense(units = 200, activation = "relu", use_bias = FALSE) %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 1, activation = "linear"),
-                     b = function(x) x %>% 
-                       layer_dense(units = 200, activation = "relu", use_bias = FALSE) %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 200, activation = "relu") %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 1, activation = "linear"),
-                     c = function(x) x %>% 
-                       layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 1, activation = "linear"),
-                     d = function(x) x %>% 
-                       layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 20, activation = "relu") %>%
-                       layer_dropout(rate = 0.1) %>% 
-                       layer_dense(units = 1, activation = "linear")
-  )
+  if(with_head)
+  {
+    deep_mod <- switch(architecture,
+                       a = function(x) x %>% 
+                         layer_dense(units = 100, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 1, activation = "linear"),
+                       b = function(x) x %>% 
+                         layer_dense(units = 100, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 100, activation = "relu") %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 1, activation = "linear"),
+                       c = function(x) x %>% 
+                         layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 1, activation = "linear"),
+                       d = function(x) x %>% 
+                         layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 20, activation = "relu") %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 1, activation = "linear")
+    )
+  }else{
+    deep_mod <- switch(architecture,
+                       a = function(x) x %>% 
+                         layer_dense(units = 100, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1),
+                       b = function(x) x %>% 
+                         layer_dense(units = 100, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 100, activation = "relu") %>%
+                         layer_dropout(rate = 0.1),
+                       c = function(x) x %>% 
+                         layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1),
+                       d = function(x) x %>% 
+                         layer_dense(units = 20, activation = "relu", use_bias = FALSE) %>%
+                         layer_dropout(rate = 0.1) %>% 
+                         layer_dense(units = 20, activation = "relu") %>%
+                         layer_dropout(rate = 0.1)
+    )
+  }
   
   return(deep_mod)
+}
+
+form_generator <- function(colnms, 
+                           teterms = c("latitude", "longitude"), 
+                           nam=FALSE,
+                           add_deep=FALSE,
+                           deep_only=FALSE)
+{
+  
+  form <- "~ 1"
+  
+  if(!deep_only){
+    
+    if(teterms[1]%in%colnms & teterms[2]%in%colnms){
+      Vs <- setdiff(colnms, teterms)
+      if(nam){
+        spatial <- paste0("tenam(", teterms[1], ", ", teterms[2], ") + ")
+      }else{
+        spatial <- paste0("te(", teterms[1], ", ", teterms[2], ") + ") 
+      }
+    }else{
+      Vs <- colnms
+      spatial <- ""
+    }
+    
+    if(!nam){
+      form <- paste0(form,
+                     " + ",
+                     spatial,
+                     paste(paste0("s(", Vs, ")"), collapse=" + "))
+    }else{
+      form <- paste0(form,
+                     " + ",
+                     spatial,
+                     paste(paste0("snam(", Vs, ")"), collapse=" + "))
+    }
+
+  }else{
+    add_deep = TRUE
+  }
+    
+  if(add_deep)
+    form <- paste0(form, " + deep_mod(",
+                   paste(colnms, collapse=", "), ")")
+  
+  
+  return(form)
+  
 }
 
 feature_net <- function(x) x %>% 
@@ -92,8 +166,10 @@ dr <- function(formla, trainX, trainY, testX, testY,
               patience = patience, verbose = verbose)
   
   # res <- mod %>% predict(testX)
-  ll <- log_score(mod, data = testX, this_y = testY)
-
+  ll <- mean(log_score(mod, data = testX, this_y = matrix(testY)))
+  
+  rm(mod); gc()
+  
   return(ll)
   
 }
@@ -102,7 +178,6 @@ dr <- function(formla, trainX, trainY, testX, testY,
 
 tm <- function(formula, trainX, trainY, testX, testY,
                deep_mod_list = NULL,
-               additional_processors = NULL,
                maxEpochs = 1000,
                patience = 50, 
                optimizer = optimizer_adam(),
@@ -117,13 +192,10 @@ tm <- function(formula, trainX, trainY, testX, testY,
   
   family <- "normal"
   
-  args <- list(formula = formula,
+  args <- list(formula = as.formula(formula),
                data = data,
                latent_distr = family,
                list_of_deep_models = deep_mod_list,
-               additional_processors = additional_processors,
-               data = trainX, 
-               family = family,
                optimizer = optimizer,
                orthog_options = oz_option)
   
@@ -136,11 +208,83 @@ tm <- function(formula, trainX, trainY, testX, testY,
               patience = patience, verbose = verbose)
   
   # res <- mod %>% predict(testX)
-  ll <- logLik(mod, newdata = cbind(testX, y = testY))
+  ll <- mean(logLik(mod, newdata = cbind(testX, y = testY)))
+  
+  rm(mod); gc()
   
   return(ll)
   
 }
+
+neat_generic <- function(trainX, trainY, testX, testY,
+                         architecture, type,
+                         addnam = TRUE,
+                         optimizer = optimizer_adam(),
+                         maxEpochs = 5000,
+                         patience = 250, 
+                         verbose = FALSE,
+                         ...)
+{
+  
+  dim_features <- ncol(trainX)
+
+  if(!is.null(architecture)){
+    
+    deep_mod_ <- get_deep_mod(architecture, with_head = FALSE)
+  
+    if(addnam)
+      deep_mod <- function(x) 
+        tf$concat(list(deep_mod_(x),
+                       feature_specific_network()(x)),
+                  axis=1L
+      ) else deep_mod <- deep_mod_
+        
+    mod <- neat(
+      dim_features,
+      net_x_arch_trunk = deep_mod,
+      type = type,
+      optimizer = optimizer
+    )
+    
+  }else{
+   
+    mod <- sneat(
+      dim_features,
+      type = type,
+      optimizer = optimizer
+    ) 
+    
+  }
+
+  mod %>% fit(x = list(as.matrix(trainX), matrix(trainY)),
+              y = matrix(trainY),
+              epochs = maxEpochs, 
+              callbacks = callback_early_stopping(
+                patience = patience, restore_best_weights = TRUE
+              ),
+              view_metrics = FALSE,
+              verbose = verbose,
+              validation_split = 0.1
+              )
+  
+  # res <- mod %>% predict(testX)
+  ll <- mean(as.matrix(tfd_log_prob(tfd_normal(loc = 0, scale = 1), 
+                                   mod(list(as.matrix(testX), 
+                                            matrix(testY))))))
+  
+  rm(mod); gc()
+  
+  return(ll)
+  
+}
+
+neatls <- function(...) neat_generic(type = "ls", ...) 
+neattp <- function(...) neat_generic(type = "tp", ...) 
+neatinter <- function(...) neat_generic(type = "inter", ...) 
+
+deepneatls <- function(...) neat_generic(type = "ls", addnam = FALSE, ...) 
+deepneattp <- function(...) neat_generic(type = "tp", addnam = FALSE, ...) 
+deepneatinter <- function(...) neat_generic(type = "inter", addnam = FALSE, ...) 
 
 ############################# DDR #############################
 ddr <- function(trainX, trainY, testX, testY,
@@ -149,15 +293,12 @@ ddr <- function(trainX, trainY, testX, testY,
   
   deep_mod <- get_deep_mod(architecture)
   
-  Vs <- colnames(trainX)
-  
-  form <- paste0("~ 1", 
-                 " + deep_mod(",
-                 paste(Vs, collapse=", "), ")")
+  form <- form_generator(colnames(trainX), deep_only = TRUE)
   
   res <- dr(form, deep_mod_list = list(deep_mod = deep_mod),
-             trainX = trainX, trainY = trainY, testX = testX,
-             ...)
+            trainX = trainX, trainY = trainY, 
+            testX = testX, testY = testY,
+            ...)
   
   return(res)
   
@@ -167,14 +308,9 @@ ddr <- function(trainX, trainY, testX, testY,
 sadr <- function(trainX, trainY, testX, testY,
                  ...){
   
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
+  form <- form_generator(colnames(trainX), nam = FALSE, add_deep = FALSE)
   
-  form <- paste0("~ 1 + ",
-                 "te(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("s(", Vs, ")"), collapse=" + "))
-  
-  res <- dr(form, trainX, trainY, testX, ...)
+  res <- dr(form, trainX, trainY, testX, testY, ...)
   
   return(res)
   
@@ -188,17 +324,10 @@ ssdr <- function(trainX, trainY, testX, testY,
   
   deep_mod <- get_deep_mod(architecture)
   
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("~ 1 + ",
-                 "te(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("s(", Vs, ")"), collapse=" + "),
-                 " + deep_mod(",
-                 paste(Vs, collapse=", "), ")")
+  form <- form_generator(colnames(trainX), nam = FALSE, add_deep = TRUE)
   
   res <- dr(form, deep_mod_list = list(deep_mod = deep_mod),
-             trainX, trainY, testX, 
+             trainX, trainY, testX, testY, 
              oz_option = orthog_control(orthogonalize = FALSE),
              ...)
   
@@ -212,24 +341,17 @@ namdr <- function(trainX, trainY, testX, testY,
                   architecture,
                   ...){
   
-  deep_mod <- get_deep_mod(architecture)
-  
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("~ 1 + ",
-                 "tenam(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("snam(", Vs, ")"), collapse=" + "))
-  
+  form <- form_generator(colnames(trainX), nam = TRUE, add_deep = FALSE)
+
   res <- dr(form, 
-             trainX, trainY, testX, 
-             oz_option = orthog_control(orthogonalize = FALSE),
-             list_of_deep_models = list(
-               deep_mod = deep_mod,
-               snam = feature_net,
-               tenam = feature_net_bi
-             ),
-             ...)
+            trainX, trainY, testX, testY,
+            oz_option = orthog_control(orthogonalize = FALSE),
+            deep_mod_list = list(
+              # deep_mod = deep_mod,
+              snam = feature_net,
+              tenam = feature_net_bi
+            ),
+            ...)
   
   return(res)
   
@@ -243,69 +365,12 @@ snamdr <- function(trainX, trainY, testX, testY,
   
   deep_mod <- get_deep_mod(architecture)
   
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("~ 1 + ",
-                 "tenam(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("snam(", Vs, ")"), collapse=" + "),
-                 " + deep_mod(",
-                 paste(Vs, collapse=", "), ")")
+  form <- form_generator(colnames(trainX), nam = TRUE, add_deep = TRUE)
   
   res <- dr(form, 
-             trainX, trainY, testX, 
-             oz_option = orthog_control(orthogonalize = FALSE),
-             list_of_deep_models = list(
-               deep_mod = deep_mod,
-               snam = feature_net,
-               tenam = feature_net_bi
-             ),
-             ...)
-  
-  return(res)
-  
-  
-}
-
-############################# SCTM #############################
-sctm <- function(trainX, trainY, testX, testY,
-                 ...){
-
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("y ~ 1 + ",
-                 "te(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("s(", Vs, ")"), collapse=" + "))
-  
-  res <- tm(form, 
-            trainX, trainY, testX, 
+            trainX, trainY, testX, testY,
             oz_option = orthog_control(orthogonalize = FALSE),
-            ...)
-  
-  return(res)
-  
-  
-}
-
-############################# NEAT #############################
-neat <- function(trainX, trainY, testX, testY,
-                 architecture,
-                 ...){
-  
-  deep_mod <- get_deep_mod(architecture)
-  
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("y ~ 1 + ",
-                 "tenam(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("snam(", Vs, ")"), collapse=" + "))
-  
-  res <- tm(form, 
-            trainX, trainY, testX, 
-            oz_option = orthog_control(orthogonalize = FALSE),
-            list_of_deep_models = list(
+            deep_mod_list = list(
               deep_mod = deep_mod,
               snam = feature_net,
               tenam = feature_net_bi
@@ -317,31 +382,88 @@ neat <- function(trainX, trainY, testX, testY,
   
 }
 
-############################# SNEAT #############################
-sneat <- function(trainX, trainY, testX, testY,
-                 architecture,
-                 ...){
+############################# SCTM #############################
+deepctm <- function(trainX, trainY, testX, testY,
+                    architecture,
+                    ...){
   
   deep_mod <- get_deep_mod(architecture)
   
-  Vte <- c("latitude", "longitude")
-  Vs <- setdiff(colnames(trainX), Vte)
-  
-  form <- paste0("y ~ 1 + ",
-                 "tenam(", Vte[1], ", ", Vte[2], ") + ",
-                 paste(paste0("snam(", Vs, ")"), collapse=" + "),
-                 " + deep_mod(",
-                 paste(Vs, collapse=", "), ")")
+  form <- paste0("y ", 
+                 form_generator(colnames(trainX), deep_only = TRUE))
   
   res <- tm(form, 
-             trainX, trainY, testX, 
-             oz_option = orthog_control(orthogonalize = FALSE),
-             list_of_deep_models = list(
-               deep_mod = deep_mod,
-               snam = feature_net,
-               tenam = feature_net_bi
-             ),
-             ...)
+            trainX, trainY, testX, testY,
+            oz_option = orthog_control(orthogonalize = FALSE),
+            deep_mod_list = list(
+              deep_mod = deep_mod),
+            ...)
+  
+  return(res)
+  
+  
+}
+############################# SCTM #############################
+sctm <- function(trainX, trainY, testX, testY,
+                 ...){
+
+  form <- paste0("y ", 
+                 form_generator(colnames(trainX), nam = FALSE, add_deep = FALSE))
+  
+  res <- tm(form, 
+            trainX, trainY, testX, testY,
+            oz_option = orthog_control(orthogonalize = FALSE),
+            ...)
+  
+  return(res)
+  
+  
+}
+
+############################# NAM+TM #############################
+namtm <- function(trainX, trainY, testX, testY,
+                  architecture,
+                  ...){
+  
+  # deep_mod <- get_deep_mod(architecture)
+  
+  form <- paste0("y ", 
+                 form_generator(colnames(trainX), nam = TRUE, add_deep = FALSE))
+  
+  res <- tm(form, 
+            trainX, trainY, testX, testY, 
+            oz_option = orthog_control(orthogonalize = FALSE),
+            deep_mod_list = list(
+              # deep_mod = deep_mod,
+              snam = feature_net,
+              tenam = feature_net_bi
+            ),
+            ...)
+  
+  return(res)
+  
+  
+}
+
+############################# SSNAM+TM #############################
+snamtam <- function(trainX, trainY, testX, testY,
+                    architecture,
+                    ...){
+  
+  deep_mod <- get_deep_mod(architecture)
+  
+  form <- paste0("y ", 
+                 form_generator(colnames(trainX), nam = FALSE, add_deep = TRUE))
+  
+  res <- tm(form, 
+            trainX, trainY, testX, testY,
+            oz_option = orthog_control(orthogonalize = FALSE),
+            deep_mod_list = list(
+              deep_mod = deep_mod,
+              snam = feature_net,
+              tenam = feature_net_bi
+            ),
+            ...)
   
   return(res)
   

@@ -1,8 +1,6 @@
-source("neat_model_class.R")
-library(tfprobability)
-
 ######################## Networks #############################
 ### Generic function to built an MLP
+#' 
 mlp_with_default_layer <- function(size, default_layer)
 {
   
@@ -24,6 +22,25 @@ relu_network <- function(size) mlp_with_default_layer(size,
                          default_layer = function(...) 
                            layer_dense(..., activation = "relu")
                          )
+
+### Feature-specific network for NAMs
+feature_specific_network <- function(size = c(64,64,32),
+                                     default_layer = function(...)
+                                       layer_dense(..., activation = "relu")
+                                     )
+{
+  
+  function(x){
+    tf$concat(
+      lapply(tf$split(x, num_or_size_splits = x$shape[[2]], axis=1L),
+             function(xx) xx %>% mlp_with_default_layer(
+               size = size,
+               default_layer = default_layer)()
+      ), axis=1L
+      )
+  }
+  
+}
 
 ### Special layer for monotonocity
 layer_nonneg_tanh <- function(...) layer_dense(..., activation = "tanh", 
@@ -66,7 +83,7 @@ interconnected_network <- function(inpY, inpX,
 layer_inverse_exp <- function(object, units, ...)
 {
   
-  function(object) tf$multiply(layer_dense(object, units, ...), -0.5)
+  function(object) tf$math$exp(tf$multiply(layer_dense(object, units, ...), -0.5))
   
 }
 
@@ -123,5 +140,19 @@ neat <- function(
   )
   
   return(mod)
+  
+}
+
+sneat <- function(
+    dim_features,
+    ...
+    )
+{
+  
+  neat(
+    dim_features = dim_features,
+    net_x_arch_trunk = feature_specific_network(c(64,64,32)),
+    ...
+  )
   
 }

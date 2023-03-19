@@ -1,6 +1,3 @@
-library(keras)
-library(tensorflow)
-
 neat_model <- new_model_class(
   classname = "neat_model",
   train_step = function(data) {
