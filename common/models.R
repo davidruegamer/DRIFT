@@ -220,7 +220,7 @@ neat_generic <- function(trainX, trainY, testX, testY,
                          architecture, type,
                          addnam = TRUE,
                          optimizer = optimizer_adam(),
-                         maxEpochs = 5000,
+                         maxEpochs = 10000,
                          patience = 250, 
                          verbose = FALSE,
                          ...)
@@ -275,7 +275,7 @@ neat_generic <- function(trainX, trainY, testX, testY,
   #                     )$logLik$numpy()
   ll <- - mod$evaluate(list(as.matrix(testX),
                             matrix(testY)),
-                       matrix(testY))
+                       matrix(testY))/nrow(testX)
   
   rm(mod); gc()
   
