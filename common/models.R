@@ -208,7 +208,7 @@ tm <- function(formula, trainX, trainY, testX, testY,
               patience = patience, verbose = verbose)
   
   # res <- mod %>% predict(testX)
-  ll <- mean(logLik(mod, newdata = cbind(testX, y = testY)))
+  ll <- logLik(mod, newdata = cbind(testX, y = testY))/nrow(testX)
   
   rm(mod); gc()
   
@@ -260,7 +260,8 @@ neat_generic <- function(trainX, trainY, testX, testY,
               y = matrix(trainY),
               epochs = maxEpochs, 
               callbacks = callback_early_stopping(
-                patience = patience, restore_best_weights = TRUE
+                patience = patience, restore_best_weights = TRUE, 
+                monitor = "val_logLik"
               ),
               view_metrics = FALSE,
               verbose = verbose,
@@ -268,9 +269,13 @@ neat_generic <- function(trainX, trainY, testX, testY,
               )
   
   # res <- mod %>% predict(testX)
-  ll <- mean(as.matrix(tfd_log_prob(tfd_normal(loc = 0, scale = 1), 
-                                   mod(list(as.matrix(testX), 
-                                            matrix(testY))))))
+  # ll <- mod$test_step(list(list(tf$constant(as.matrix(testX), dtype = "float32"),
+  #                               tf$constant(matrix(testY), dtype = "float32")), 
+  #                          matrix(testY))
+  #                     )$logLik$numpy()
+  ll <- - mod$evaluate(list(as.matrix(testX),
+                            matrix(testY)),
+                       matrix(testY))
   
   rm(mod); gc()
   
