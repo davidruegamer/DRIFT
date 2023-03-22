@@ -99,7 +99,7 @@ benchmark_per_dataset <- function(name, folds = 10){
         # structured additive distreg with NAM effects
         namdr = fun_w_ar(namdr, NULL),
         
-        # semi-structured additive trafos with NAM effects
+        # semi-structured additive distreg with NAM effects
         snamdr_a = fun_w_ar(snamdr, "a"),
         snamdr_b = fun_w_ar(snamdr, "b"),
         snamdr_c = fun_w_ar(snamdr, "c"),
@@ -202,4 +202,27 @@ if(FALSE){
   
   tab_raw %>% xtable()
   
+  colnames(tab_raw)[grepl("^neat[ls|tp|inter]", colnames(tab_raw)) & 
+                      grepl("\\_[a|b|c|d]", colnames(tab_raw))] <- paste0("s", 
+    colnames(tab_raw)[grepl("^neat[ls|tp|inter]", colnames(tab_raw)) & 
+                        grepl("\\_[a|b|c|d]", colnames(tab_raw))] 
+                      )
+  
+  ctr <- unique(gsub("\\_[a|b|c|d]", "", colnames(tab_raw)))
+  tab_agg <- as.data.frame(
+    lapply(1:length(ctr), function(i)
+      apply(tab_raw[,grepl(ctr[i], colnames(tab_raw)),drop=F],1, max))
+  )
+  colnames(tab_agg) <- c("DDR", paste0("DNEAT", c("-LS","-TP","-NN")), "SADR", "SSADR",
+                         "NAMDR", "SSNAMDR", "CTM", "DCTM",
+                         "NAMCTM", paste0("SNEAT", c("-LS","-TP","-NN")), "SSNAMCTM", 
+                         paste0("SSNEAT", c("-LS","-TP","-NN")))
+  
+  tab_agg <- tab_agg %>% 
+    mutate_all(~ if_else(as.numeric(trimws(gsub("(.*)(\\(.*\\))", "\\1", .x))) < -100 | 
+                           .x == "NA (NA)", 
+                         "NC (NC)", .x))
+  
+  tab_agg %>% t() %>% xtable()
+
 }

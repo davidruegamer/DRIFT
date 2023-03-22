@@ -160,6 +160,8 @@ dr <- function(formla, trainX, trainY, testX, testY,
   ellips <- list(...)
   args <- c(args, ellips)
 
+  if(is.null(deep_mod_list)) args$architecture <- NULL
+  
   mod <- do.call("deepregression", args)
   
   mod %>% fit(epochs = maxEpochs, early_stopping = TRUE, 
