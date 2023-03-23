@@ -62,10 +62,12 @@ plot(tm, which = "baseline only")
 ### NONP
 lines(levels(BostonHousing2$ocmedv)[-length(levels(BostonHousing2$ocmedv))],
       unlist(coef(m, which = "interacting")), type = "s", col = "red")
-legend("topleft", c("Bernstein 25", "Nonparametric"), col = c("black", "red"),
-       lwd = 2)
 
 ### NEAT
 ys <- seq(min(y), max(y), length.out = 1e3)
 Xs <- matrix(0, nrow = 1e3, ncol = 1)
 lines(ys, c(predict(mod, list(Xs, matrix(ys)))), col = 3)
+
+legend("topleft", c("Bernstein 25", "Nonparametric", "Location-scale NEAT"),
+       col = 1:3, lwd = 2)
+
