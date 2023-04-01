@@ -130,9 +130,8 @@ neat <- function(
     inter = interconnected_network(inpY, outpX)
   )
   
-  mod <- neat_model(list(inpX, inpY), outp)
-  
-  bd <- base_distribution
+  mod <- neat_model(list(inpX, inpY), outp, 
+                    base_distribution = base_distribution)
   
   mod %>% compile(
     loss = function(y_true, y_pred) -1 * tfd_log_prob(bd, y_pred),

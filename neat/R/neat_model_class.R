@@ -1,7 +1,13 @@
 neat_model <- new_model_class(
   classname = "neat_model",
+  initialize = function(base_distribution = tfd_normal(loc = 0, scale = 1),
+                        ...)
+  {
+    super$initialize(...)
+    self$base_distribution = base_distribution 
+  },
   loss_fn_unnorm = function(y_true, y_pred) { 
-    -1 * tfd_log_prob(tfd_normal(loc = 0, scale = 1), y_pred)
+    -1 * tfd_log_prob(self$base_distribution, y_pred)
   },
   train_step = function(data) {
     
