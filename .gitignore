@@ -1,5 +1,6 @@
 .idea
 .python-version
+__pycache__
 
 # History files
 .Rhistory
