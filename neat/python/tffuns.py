@@ -3,9 +3,11 @@ from tensorflow import keras
 
 # Source: https://github.com/neural-structured-additive-learning/deepregression/blob/main/inst/python/tffuns/tffuns.py
 
+
 def tf_repeat(a, dim):
-    return tf.reshape(tf.tile(tf.expand_dims(a, axis=-1), (1, 1, dim)),
-                      shape=(-1, a.shape[1] * dim))
+    return tf.reshape(
+        tf.tile(tf.expand_dims(a, axis=-1), (1, 1, dim)), shape=(-1, a.shape[1] * dim)
+    )
 
 
 def tf_row_tensor_left_part(a, b):

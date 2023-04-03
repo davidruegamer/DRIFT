@@ -7,7 +7,9 @@ from keras.layers import Dense, Input, Concatenate, Activation
 from keras.optimizers import Adam, Optimizer
 from tensorflow_probability import distributions as tfd
 
+from monolayers import MonoMultiLayer, mono_trafo_multi
 from neat_model_class import NEATModel
+from tffuns import RowTensor
 
 
 class ModelType(Enum):
@@ -62,7 +64,14 @@ def nonneg_tanh_network(size: int) -> callable:
 
 
 def tensorproduct_network(inpY, inpX):
-    raise NotImplementedError
+    row_tensor = RowTensor()([inpX, inpY])
+    return MonoMultiLayer(
+        row_tensor,
+        units=1,
+        dim_bsp=inpX.shape[1] * inpY.shape[1],  # TODO: check
+        trafo=mono_trafo_multi,
+        trainable=True,
+    )
 
 
 def interconnected_network(
