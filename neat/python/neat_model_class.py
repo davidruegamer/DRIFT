@@ -3,8 +3,8 @@ import tensorflow as tf
 
 
 class NEATModel(tf.keras.Model):
-    def __init__(self, base_distribution=tfd.Normal(loc=0, scale=1), **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, base_distribution=tfd.Normal(loc=0, scale=1), **kwargs):
+        super().__init__(*args, **kwargs)
         self.base_distribution = base_distribution
 
     def loss_fn_unnorm(self, y_true, y_pred):
