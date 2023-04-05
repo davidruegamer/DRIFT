@@ -30,6 +30,9 @@ train_mod <- function(mod, ep, bs = 256L, d_tr = NULL, d_val = NULL, v = 2, s = 
   if (final) {
     
     cat("Final model with ep =", ep, "\n")
+    
+    # model needs to be untrained
+    stopifnot(any(sapply(get_weights(mod), sum) == 0))
 
     mod |> fit(x = d_tr[[1]], y = d_tr[[2]], 
                epochs = ep, 
@@ -62,7 +65,7 @@ train_mod <- function(mod, ep, bs = 256L, d_tr = NULL, d_val = NULL, v = 2, s = 
   }
 }
 
-res <- sapply(unique(electricity$d_val_tr$id)[1:5], function(idd) {
+res <- sapply(unique(electricity$d_val_tr$id), function(idd) {
   
   ## iterate through ts (one per id)
   
@@ -74,10 +77,9 @@ res <- sapply(unique(electricity$d_val_tr$id)[1:5], function(idd) {
   p <- length(lags)
   
   # define model
-  m_orig <- neat(p, 
-            type = "ls", 
-            optimizer = optimizer_adam(learning_rate = 0.0001),
-  )
+  def_mod <- function() neat(p, type = "ls",
+                             optimizer = optimizer_adam(learning_rate = 0.0001))
+  m <- def_mod()
   
   ## train model to determine optimal no. of epochs on test
   
@@ -94,7 +96,7 @@ res <- sapply(unique(electricity$d_val_tr$id)[1:5], function(idd) {
   X_tr <- predict(preProcValues, X_tr)
   X_tst <- predict(preProcValues, X_tst)
   
-  tst_epochs <- train_mod(m_orig,
+  tst_epochs <- train_mod(m,
                           ep = 1e4, 
                           d_tr = list(list(X_tr, y_tr), y_tr),
                           d_val = list(list(X_tst, y_tst), y_tst), 
@@ -121,7 +123,7 @@ res <- sapply(unique(electricity$d_val_tr$id)[1:5], function(idd) {
   # repeated model runs to gauge stochasticity of neats
   neat_logliks <- sapply(1:10, function(rp) {
     
-    m <- m_orig # reset model to avoid continued training
+    m <- def_mod() # reset model to avoid continued training
     train_mod(m, ep = tst_epochs, 
               d_tr = list(list(X_tr, y_tr), y_tr),
               d_val = list(list(X_tst, y_tst), y_tst),
