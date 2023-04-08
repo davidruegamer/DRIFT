@@ -40,17 +40,17 @@ sr_fun <- function(kn){
   
 }
 
-mod_10 <- sr_fun(10)
-y_fitted_10 <- mod_10 %>% predict(data)
-y_test_fitted_10 <- mod_10 %>% predict(data.frame(x=x_test, y=y_test))
+mod_a <- sr_fun(10)
+y_fitted_a <- mod_a %>% predict(data)
+y_test_fitted_a <- mod_a %>% predict(data.frame(x=x_test, y=y_test))
 
-mod_20 <- sr_fun(20)
-y_fitted_20 <- mod_20 %>% predict(data)
-y_test_fitted_20 <- mod_20 %>% predict(data.frame(x=x_test, y=y_test))
+mod_b <- sr_fun(50)
+y_fitted_b <- mod_b %>% predict(data)
+y_test_fitted_b <- mod_b %>% predict(data.frame(x=x_test, y=y_test))
 
-mod_50 <- sr_fun(50)
-y_fitted_50 <- mod_50 %>% predict(data)
-y_test_fitted_50 <- mod_50 %>% predict(data.frame(x=x_test, y=y_test))
+mod_c <- sr_fun(100)
+y_fitted_c <- mod_c %>% predict(data)
+y_test_fitted_c <- mod_c %>% predict(data.frame(x=x_test, y=y_test))
     
 neat_mod <- neat(1, net_x_arch_trunk = feature_net)
     
@@ -75,21 +75,27 @@ y_test_fitted_neat_med <- apply(y_test_fitted_neat, 1, function(x) seq(-2.5, 2.5
 true_data <- data.frame(x = c(x, x_test), 
                         y = c(y, y_test))
 mod_data <- data.frame(x = rep(c(x, x_test), 4),
-                       yhat = c(y_fitted_10, y_test_fitted_10,
-                                y_fitted_20, y_test_fitted_20,
-                                y_fitted_50, y_test_fitted_50,
+                       yhat = c(y_fitted_a, y_test_fitted_a,
+                                y_fitted_b, y_test_fitted_b,
+                                y_fitted_c, y_test_fitted_c,
                                 y_fitted_neat, y_test_fitted_neat_med),
-                       model = c(rep(c("GAM (10)", "GAM (20)", "GAM (50)", "NEAT"), 
+                       model = c(rep(c("GAM (10 basis functions)", 
+                                       "GAM (50 basis functions)", 
+                                       "GAM (100 basis functions)", "NEAT"), 
                                      each = length(c(x, x_test)))),
                        part = c(rep(rep(c("in-dist.", "out-of-dist."), c(length(x), length(x_test))), 4))
 )
+
+mod_data$model <- factor(mod_data$model, levels = unique(mod_data$model))
   
 ggplot() + 
   geom_line(data = mod_data, aes(x = x, y = yhat, colour = model, linetype = part),
             size = 1.2) + facet_wrap(~ model) + 
   geom_point(data = true_data, aes(x = x, y = y), alpha = 0.5,
-             shape = 4) + theme_bw() + 
+             shape = 4, size = 0.9) + theme_bw() + 
   theme(text = element_text(size = 16),
-        legend.title = element_blank()) + 
-  xlab("x") + ylab("y") + xlim(0.5, 1.1)
-ggsave(filename = "basis_fun.pdf", width = 5, height = 4)
+        legend.title = element_blank(), legend.position = "bottom") +
+  guides(color = FALSE) +
+  xlab("x") + ylab("y") + xlim(0.5, 1.1)  
+  
+ggsave(filename = "basis_fun.pdf", width = 10, height = 4)
