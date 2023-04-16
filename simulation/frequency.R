@@ -1,14 +1,14 @@
 library(deepregression)
 library(tidyverse)
 library(ggplot2)
-devtools::load_all("../../neat/R")
+devtools::load_all("../neat/R")
 
 set.seed(137)
 
 ### NAM block
 feature_net <- function(x) x %>% 
-  layer_dense(units = 64 * 10, activation = "relu", use_bias = FALSE) %>% 
-  layer_dense(units = 32 * 10, activation = "relu") %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
   layer_dense(units = 1)
 
 n <- 1000
@@ -62,15 +62,28 @@ neat_mod %>% fit(x = list(x, y), y, epochs = 2000L,
                  verbose = FALSE)
 
 y_fitted_neat <- neat_mod %>% predict(list(x, y))
-y_test_fitted_neat <- sapply(seq(-2.5, 2.5, l=100), function(y)
+
+check_seq <- seq(-2.5, 2.5, l=100)
+
+y_fitted_neat_all <- sapply(check_seq, function(add)
+  pred_cdf <- tfd_normal(0,1) %>%
+    tfd_cdf(neat_mod %>% predict(list(x, y + rep(add, length(y))))) %>%
+    as.matrix
+)
+colnames(y_fitted_neat_all) <- check_seq
+rownames(y_fitted_neat_all) <- x
+y_fitted_neat_all_med <- y + apply(y_fitted_neat_all, 1, function(x) check_seq[which.min(abs(x-0.5))])
+
+check_seq_test <- seq(-2.5, 2.5, l=100)
+
+y_test_fitted_neat <- sapply(check_seq_test, function(y)
   pred_cdf <- tfd_normal(0,1) %>% 
     tfd_cdf(neat_mod %>% predict(list(x_test, rep(y, length(x_test))))) %>% 
     as.matrix
 )
-colnames(y_test_fitted_neat) <- #paste0("y = ", 
-  seq(-2.5, 2.5, l=100)#)
+colnames(y_test_fitted_neat) <- check_seq_test
 rownames(y_test_fitted_neat) <- x_test
-y_test_fitted_neat_med <- apply(y_test_fitted_neat, 1, function(x) seq(-2.5, 2.5, l=100)[which.min(abs(x-0.5))])
+y_test_fitted_neat_med <- apply(y_test_fitted_neat, 1, function(x) check_seq_test[which.min(abs(x-0.5))])
 
 true_data <- data.frame(x = c(x, x_test), 
                         y = c(y, y_test))
@@ -78,7 +91,13 @@ mod_data <- data.frame(x = rep(c(x, x_test), 4),
                        yhat = c(y_fitted_a, y_test_fitted_a,
                                 y_fitted_b, y_test_fitted_b,
                                 y_fitted_c, y_test_fitted_c,
-                                y_fitted_neat, y_test_fitted_neat_med),
+                                ##############################
+                                # the trafo:
+                                y_fitted_neat, 
+                                # medians?:
+                                # y_fitted_neat_all_med
+                                ##############################
+                                y_test_fitted_neat_med),
                        model = c(rep(c("GAM (10 basis functions)", 
                                        "GAM (50 basis functions)", 
                                        "GAM (100 basis functions)", "NEAT"), 
