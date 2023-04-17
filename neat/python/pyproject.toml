@@ -14,3 +14,17 @@ tensorflow-probability = "^0.19.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.autoflake]
+expand-star-imports = true
+ignore-init-module-imports = true
+remove-all-unused-imports = true
+remove-unused-variables = true
+
+[tool.black]
+# line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"

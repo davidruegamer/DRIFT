@@ -1,5 +1,5 @@
-from tensorflow_probability import distributions as tfd
 import tensorflow as tf
+from tensorflow_probability import distributions as tfd
 
 
 class NEATModel(tf.keras.Model):
