@@ -42,6 +42,36 @@ feature_specific_network <- function(size = c(64,64,32),
   
 }
 
+### Semi-structured NAMs
+semi_structured_nams <- function(size_nam = c(64,64,32),
+                                 size_deep = c(100,100,10),
+                                 default_layer_nam = function(...)
+                                   layer_dense(..., activation = "relu"),
+                                 default_layer_deep = function(...)
+                                   layer_dense(..., activation = "relu")
+)
+{
+  
+  function(x){
+    tf$concat(
+      c(
+        lapply(tf$split(x, num_or_size_splits = x$shape[[2]], axis=1L),
+               function(xx) xx %>% mlp_with_default_layer(
+                 size = size_nam,
+                 default_layer = default_layer_nam)()
+        ),
+        list(
+          x %>% mlp_with_default_layer(
+            size = size_deep,
+            default_layer = default_layer_deep
+          )()
+        )
+      ), axis=1L
+    )
+  }
+  
+}
+
 ### Special layer for monotonocity
 layer_nonneg_tanh <- function(...) layer_dense(..., activation = "tanh", 
                                                kernel_constraint = 
@@ -74,8 +104,7 @@ interconnected_network <- function(inpY, inpX,
   
   layer_concatenate(list(inpX, inpY)) %>% 
     network_default() %>% 
-    top_layer %>% 
-    layer_activation(activation = "softplus")
+    top_layer
   
 }
 
@@ -151,6 +180,20 @@ sneat <- function(
   neat(
     dim_features = dim_features,
     net_x_arch_trunk = feature_specific_network(c(64,64,32)),
+    ...
+  )
+  
+}
+
+sesneat <- function(
+    dim_features,
+    ...
+)
+{
+  
+  neat(
+    dim_features = dim_features,
+    net_x_arch_trunk = semi_structured_nams(),
     ...
   )
   
