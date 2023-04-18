@@ -83,7 +83,6 @@ def interconnected_network(
     x = Concatenate()([inpX, inpY])
     x = network_default(x)
     x = top_layer(x)
-    x = Activation("softplus")(x)
     return x
 
 
