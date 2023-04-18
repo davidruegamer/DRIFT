@@ -16,7 +16,7 @@ tf$constant(1) # check TF
 
 ## Load Data and train_mod()
 
-ts_application <- file.path(getwd(), "application","ts_example")
+ts_application <- file.path(getwd(), "application","Elec")
 data_path <- file.path(ts_application, "electricity.RDS")
 source(file.path(ts_application, "utils.R"))
 

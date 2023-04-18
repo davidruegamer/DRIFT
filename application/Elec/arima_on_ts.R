@@ -4,12 +4,17 @@ rm(list = ls())
 
 pacman::p_load(furrr, scoringRules, xts, purrr, forecast, data.table)
 
-ts_application <- file.path(getwd(), "application","ts_example")
+ts_application <- file.path(getwd(), "application","Elec")
 data_path <- file.path(ts_application, "electricity.RDS")
+
+if (!file.exists(data_path)) {
+  # prepare data
+  source(file.path(ts_application, "prep_data_elec.R"))
+}
 
 no_cores <- parallel::detectCores() - 1
 metric <- "logscore"
-sub_index <- 2
+sub_index <- NULL # try "2"
 plan(cluster, workers = no_cores)
 
 find_arima <- function(yy, pp = 24, qq = 3, trun = NULL) {
@@ -110,6 +115,8 @@ forecast_arima <- function(m, d_evl, what = "logscore") {
     logs <- sapply(seq_along(forecast_horizon), function(t_idx) {
       dnorm(x = d_evl[t_idx], mean = for_cast$mean[t_idx], sd = for_cast$se[t_idx], log=TRUE)
     })
+    
+    return(xts::as.xts(logs, order.by = forecast_horizon))
   }else{
     crps <- sapply(seq_along(forecast_horizon), function(t_idx) {
       crps_norm(y = d_evl[t_idx], mean = for_cast$mean[t_idx], sd = for_cast$se[t_idx])
