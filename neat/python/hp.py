@@ -5,7 +5,7 @@
 # author  : Marcel Arpogaus <marcel dot arpogaus at gmail dot com>
 #
 # created : 2021-05-10 17:59:17 (Marcel Arpogaus)
-# changed : 2023-04-17 14:20:19 (Marcel Arpogaus)
+# changed : 2023-04-18 14:43:04 (Marcel Arpogaus)
 # DESCRIPTION #################################################################
 # ...
 # LICENSE #####################################################################
@@ -23,19 +23,18 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 import tensorflow_probability as tfp
+from hyperopt import STATUS_FAIL, STATUS_OK, Trials, fmin, hp, tpe
 from keras.layers import Dense
 from keras.optimizers import Adam
 from tensorflow_probability import distributions as tfd
 
-from hyperopt import STATUS_FAIL, STATUS_OK, Trials, fmin, hp, tpe
-
-from .utils import (
+from utils import (
     ModelType,
     feature_specific_network,
-    flow,
-    hist,
+    fit,
     layer_inverse_exp,
     layer_nonneg_tanh,
+    load_data,
     nonneg_tanh_network,
 )
 
@@ -53,6 +52,7 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument("--seed", help="random seed", default=1, type=int)
+    parser.add_argument("--data-path", help="path to dataset", type=str)
     parser.add_argument(
         "--log-file",
         default="train.log",
@@ -138,6 +138,8 @@ if __name__ == "__main__":
     else:
         mlflow.start_run(run_name="hypeopt")
 
+    train_data, val_data, test_data = load_data(args.data_path)
+
     def F(params):
         if args._10sec:
             params["fit_kwds"].update({"epochs": 1})
@@ -152,11 +154,18 @@ if __name__ == "__main__":
         )
         mlflow.log_params(params["fit_kwds"])
 
-        mlflow.log_artifacts(artifacts_path)
+        hist, neat_model = fit(
+            seed=args.seed,
+            epochs=1000,
+            train_data=train_data,
+            val_data=val_data,
+            **params,
+        )
+        # mlflow.log_artifacts(artifacts_path)
 
         loss = min(hist.history["val_loss"])
         status = STATUS_OK
-        if np.isnan(loss).any() or np.isnan(flow.mean().numpy()).any():
+        if np.isnan(loss).any():
             status = STATUS_FAIL
         mlflow.end_run("FINISHED" if status == STATUS_OK else "FAILED")
         return {"loss": loss, "status": status}

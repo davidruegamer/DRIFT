@@ -145,6 +145,44 @@ def get_neat_model(
     return model
 
 
+def load_data(data_path) -> tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
+    """loads the benchmark data from the given path.
+
+    :param data_path: path to folder containing data
+    :type data_path: str
+    :returns: tuple containing train, test and validation data as tf.data.Dataset
+
+    """
+    ds = tf.data.Dataset.from_tensor_slices
+    shape_x = (1000, 3)
+    shape_y = (1000, 1)
+    return (
+        (
+            ds(tf.random.uniform(shape_x)),
+            ds(tf.random.uniform(shape_y)),
+        ),
+        (
+            ds(tf.random.uniform(shape_x)),
+            ds(tf.random.uniform(shape_y)),
+        ),
+        (
+            ds(tf.random.uniform(shape_x)),
+            ds(tf.random.uniform(shape_y)),
+        ),
+    )
+
+
+def fit(seed, epochs, train_data, val_data, **params):
+    tf.random.set_seed(seed)
+
+    neat_model = get_neat_model(**params)
+
+    # TODO: Add Callbacks for Early Stopping
+    hist = neat_model.fit(x=train_data, val_data=val_data, epochs=epochs)
+
+    return hist, neat_model
+
+
 if __name__ == "__main__":
     neat_model = get_neat_model(
         dim_features=3,
