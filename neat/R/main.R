@@ -104,8 +104,7 @@ interconnected_network <- function(inpY, inpX,
   
   layer_concatenate(list(inpX, inpY)) %>% 
     network_default() %>% 
-    top_layer %>% 
-    layer_activation(activation = "softplus")
+    top_layer
   
 }
 
