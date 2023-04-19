@@ -9,6 +9,7 @@ from tensorflow_probability import distributions as tfd
 
 from monolayers import MonoMultiLayer, mono_trafo_multi
 from neat_model_class import NEATModel
+from tffuns import RowTensor
 
 
 class ModelType(Enum):
@@ -63,7 +64,9 @@ def nonneg_tanh_network(size: int) -> callable:
 
 
 def tensorproduct_network(inpY, inpX, output_dim):
-    x = Concatenate()([inpX, inpY])
+    # x = Concatenate()([inpX, inpY])
+    # row_tensor = tf.einsum('ij,ik->jk', inpY, inpX)
+    row_tensor = RowTensor()([inpY, inpX])
     return MonoMultiLayer(
         output_dim=output_dim,
         # row_tensor,
@@ -71,7 +74,7 @@ def tensorproduct_network(inpY, inpX, output_dim):
         dim_bsp=inpX.shape[1] * inpY.shape[1],  # TODO: check
         trafo=mono_trafo_multi,
         trainable=True,
-    )(x)
+    )(row_tensor)
 
 
 def interconnected_network(
@@ -123,7 +126,7 @@ def get_neat_model(
     inpY = Input(shape=(1,))
 
     # (intermediate) outputs
-    outpX = net_x_arch_trunk(inpX)
+    outpX = net_x_arch_trunk(inpX) # shape (#n, dim_features*last_default_layer)
 
     # outputs
     if model_type == ModelType.TP:
@@ -215,6 +218,7 @@ if __name__ == "__main__":
         top_layer=layer_nonneg_tanh(units=1),
     )
     neat_model.summary()
+
     neat_model = get_neat_model(
         dim_features=3,
         net_x_arch_trunk=feature_specific_network(
