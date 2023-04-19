@@ -80,6 +80,13 @@ layer_nonneg_tanh <- function(...) layer_dense(..., activation = "tanh",
                                                  keras$initializers$random_uniform(minval = 0, 
                                                                                    maxval = 1))
 
+layer_nonneg_lin <- function(...) layer_dense(..., activation = "linear", 
+                                              kernel_constraint = 
+                                                keras$constraints$non_neg(),
+                                              kernel_initializer = 
+                                                keras$initializers$random_uniform(minval = 0, 
+                                                                                  maxval = 1))
+
 ### Monotonic NN
 nonneg_tanh_network <- function(size) mlp_with_default_layer(
   size, 
@@ -99,7 +106,7 @@ tensorproduct_network <- function(inpY, inpX)
 interconnected_network <- function(inpY, inpX, 
                                    network_default = 
                                      nonneg_tanh_network(c(50, 50, 10)),
-                                   top_layer = layer_nonneg_tanh(units = 1L))
+                                   top_layer = layer_nonneg_lin(units = 1L))
 {
   
   layer_concatenate(list(inpX, inpY)) %>% 
@@ -120,14 +127,13 @@ layer_inverse_exp <- function(object, units, ...)
 locscale_network <- function(inpY, inpX,
                              mu_top_layer = layer_dense(units = 1L),
                              sd_top_layer = layer_inverse_exp(units = 1L),
-                             top_layer = layer_nonneg_tanh(units = 1L))
+                             top_layer = layer_nonneg_lin(units = 1L))
 {
   
   loc <- inpX %>% mu_top_layer()
   scale_inv <- inpX %>% sd_top_layer()
   outpY <- inpY %>% 
-    top_layer %>% 
-    layer_activation(activation = "softplus")
+    top_layer 
   
   tf$subtract(tf$multiply(scale_inv, outpY), loc)
   
