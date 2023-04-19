@@ -3,9 +3,17 @@ rm(list = ls())
 # start file from NEAT directory
 
 # set path to (conda) env
-conda_env <- "/Users/flipst3r/opt/anaconda3/envs/r-reticulate" 
-reticulate::use_condaenv(conda_env, required = TRUE)
-devtools::load_all("./neat")
+
+if (version$os != "darwin20") {
+  conda_env <- "/cluster/home/phibauma/nsgaSA"
+  reticulate::use_virtualenv(conda_env, required = TRUE)
+  devtools::load_all("./neat")
+} else {
+  conda_env <- "/Users/flipst3r/opt/anaconda3/envs/r-reticulate"
+  reticulate::use_condaenv(conda_env, required = TRUE)
+  devtools::load_all("./neat")
+}
+
 #library(tensorflow)
 #library(tfprobability)
 #library(keras)
@@ -31,7 +39,7 @@ electricity <- readRDS(data_path)
 
 max_ep <- 1e4 # max epochs for validation
 reps <- 10 # number of repeated runs for PLS std. error
-cl <- makeCluster(parallel::detectCores() - 1, outfile = '')
+cl <- makeCluster(40, outfile = '')
 clusterExport(cl, c("electricity", "conda_env","train_mod","max_ep","reps"))
 clusterEvalQ(cl, {library(data.table)
   library(caret)})
@@ -45,8 +53,13 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   ## cycles through ts (one per id)
   cat("ID:", idd, "\n")
   
-  reticulate::use_condaenv(conda_env, required = TRUE)
-  devtools::load_all("./neat")
+  if (version$os != "darwin20") {
+    reticulate::use_virtualenv("/cluster/home/phibauma/nsgaSA", required = TRUE)
+    devtools::load_all("/cluster/home/phibauma/NEAT/neat")
+  } else {
+    reticulate::use_condaenv("/Users/flipst3r/opt/anaconda3/envs/r-reticulate", required = TRUE)
+    devtools::load_all("./neat")
+  }
   
   d <- lapply(electricity, function(x) x[id == idd]) # subset
   val_tr <- d$d_val_tr
@@ -57,7 +70,6 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   # define model
   def_mod <- function() neat(p, type = "ls",
                              optimizer = optimizer_adam(learning_rate = 0.0001))
-  m <- def_mod()
   
   ## train model to determine optimal no. of epochs on test
   
@@ -75,11 +87,29 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   X_tst <- predict(preProcValues, X_tst)
   
   # train_mod() defined in utils.R
-  tst_epochs <- train_mod(m,
-                          ep = max_ep, 
-                          d_tr = list(list(X_tr, y_tr), y_tr),
-                          d_val = list(list(X_tst, y_tst), y_tst), 
-                          v = 0)
+  m <- def_mod()
+  tst_epochs <- try({train_mod(m,
+                              ep = max_ep, 
+                              d_tr = list(list(X_tr, y_tr), y_tr),
+                              d_val = list(list(X_tst, y_tst), y_tst), 
+                              v = 2)
+  }, silent = TRUE)
+  
+  gc()
+  
+  # sometimes a graph execution error in TF is encountered
+  counter <- 1
+  while (inherits(tst_epochs, "try-error") && counter <= 5) {
+    counter <- counter + 1
+    cat("Error during training occured. Re-run in progress. \n")
+    m <- def_mod()
+    tst_epochs <- try({train_mod(m,
+                                ep = max_ep, 
+                                d_tr = list(list(X_tr, y_tr), y_tr),
+                                d_val = list(list(X_tst, y_tst), y_tst), 
+                                v = 0)
+    }, silent = TRUE)
+  }
   
   ## predict on test with the previously determined no. of epochs
   
@@ -103,12 +133,19 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   neat_logliks <- sapply(1:reps, function(rp) {
     
     m <- def_mod() # reset model to avoid continued training
-    train_mod(m, ep = tst_epochs, 
-              d_tr = list(list(X_tr, y_tr), y_tr),
-              d_val = list(list(X_tst, y_tst), y_tst),
-              v = 0, 
-              final = TRUE, s = rp)
+    log_lik <- try({train_mod(m, 
+                              ep = tst_epochs, 
+                              d_tr = list(list(X_tr, y_tr), y_tr),
+                              d_val = list(list(X_tst, y_tst), y_tst),
+                              v = 0, 
+                              final = TRUE, s = rp)
+    }, silent = TRUE)
+    
+    if(inherits(log_lik, "try-error")) return(NA)
+    
+    return(log_lik)
   }, simplify = TRUE)
+
   
   return(neat_logliks)
   

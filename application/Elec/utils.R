@@ -31,13 +31,11 @@ train_mod <- function(mod, ep, bs = 256L, d_tr = NULL, d_val = NULL, v = 0, s = 
                batch_size = bs,
                view_metrics = FALSE,
                verbose = v, validation_data = NULL, validation_split = NULL)
-    
     gc()
     
-    # log likelihood on test
-    suppressMessages({
-      log_score <- - mod$evaluate(d_val[[1]], d_val[[2]])/nrow(d_val[[1]][[1]])
-    })
+    # log likelihood on test; d_val[[2]] is ignored, takes d_val[[1]][[2]] as y
+    log_score <- - mod$evaluate(d_val[[1]], d_val[[2]])/nrow(d_val[[1]][[1]])
+    
     return(log_score)
     
   } else {

@@ -12,7 +12,7 @@ if (!file.exists(data_path)) {
   source(file.path(ts_application, "prep_data_elec.R"))
 }
 
-no_cores <- parallel::detectCores() - 1
+no_cores <- 40#parallel::detectCores() - 1
 metric <- "logscore"
 sub_index <- NULL # try "2"
 plan(cluster, workers = no_cores)
