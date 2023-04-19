@@ -33,9 +33,8 @@ from utils import (
     feature_specific_network,
     fit,
     layer_inverse_exp,
-    layer_nonneg_tanh,
     load_data,
-    nonneg_tanh_network,
+    nonneg_tanh_network, layer_nonneg_lin,
 )
 
 if __name__ == "__main__":
@@ -115,13 +114,13 @@ if __name__ == "__main__":
                 model_type=ModelType.LS,
                 mu_top_layer=Dense(units=1),
                 sd_top_layer=layer_inverse_exp(units=1),
-                top_layer=layer_nonneg_tanh(units=1),
+                top_layer=layer_nonneg_lin(units=1),
             ),
             dict(
                 **common_kwds,
                 model_type=ModelType.INTER,
                 network_default=nonneg_tanh_network([50, 50, 10]),
-                top_layer=layer_nonneg_tanh(units=1),
+                top_layer=layer_nonneg_lin(units=1),
             ),
             dict(
                 **common_kwds,

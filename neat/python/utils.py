@@ -59,6 +59,15 @@ def layer_nonneg_tanh(units: int, **kwargs) -> callable:
     )
 
 
+def layer_nonneg_lin(units: int, **kwargs) -> callable:
+    return Dense(
+        activation="linear",
+        kernel_constraint=constraints.non_neg(),
+        kernel_initializer=initializers.RandomUniform(minval=0, maxval=1),
+        units=units,
+        **kwargs)
+
+
 def nonneg_tanh_network(size: int) -> callable:
     return mlp_with_default_layer(size, default_layer=layer_nonneg_tanh)
 
@@ -86,7 +95,6 @@ def interconnected_network(
     x = Concatenate()([inpX, inpY])
     x = network_default(x)
     x = top_layer(x)
-    x = Activation("softplus")(x)
     return x
 
 
@@ -107,7 +115,6 @@ def locscale_network(
     loc = mu_top_layer(inpX)
     scale_inv = sd_top_layer(inpX)
     outpY = top_layer(inpY)
-    outpY = Activation("softplus")(outpY)
 
     return tf.subtract(tf.multiply(scale_inv, outpY), loc)
 
@@ -200,7 +207,7 @@ if __name__ == "__main__":
         model_type=ModelType.LS,
         mu_top_layer=Dense(units=1),
         sd_top_layer=layer_inverse_exp(units=1),
-        top_layer=layer_nonneg_tanh(units=1),
+        top_layer=layer_nonneg_lin(units=1),
     )
     neat_model.summary()
     neat_model = get_neat_model(
@@ -215,7 +222,7 @@ if __name__ == "__main__":
         # kwds:
         model_type=ModelType.INTER,
         network_default=nonneg_tanh_network([50, 50, 10]),
-        top_layer=layer_nonneg_tanh(units=1),
+        top_layer=layer_nonneg_lin(units=1),
     )
     neat_model.summary()
 
