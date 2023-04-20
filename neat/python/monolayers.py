@@ -8,7 +8,6 @@ class MonoMultiLayer(tf.keras.layers.Layer):
     def __init__(
         self,
         output_dim=None,
-        kernel=None,
         dim_bsp=None,
         kernel_regularizer=None,
         trafo=None,

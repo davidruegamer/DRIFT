@@ -3,7 +3,7 @@ from typing import Iterable
 
 import tensorflow as tf
 from keras import constraints, initializers
-from keras.layers import Activation, Concatenate, Dense, Input
+from keras.layers import Concatenate, Dense, Input
 from keras.optimizers import Adam, Optimizer
 from tensorflow_probability import distributions as tfd
 
