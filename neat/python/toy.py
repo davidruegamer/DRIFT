@@ -12,6 +12,39 @@ from utils import get_neat_model, nonneg_tanh_network, ModelType, \
 def run_toy_example():
     X, y = get_toy_data()
     run_ls(X, y)
+    run_inter(X, y)
+
+
+def run_tp(X, y):
+    pass
+
+
+def run_inter(X, y):
+    mod = get_neat_model(
+        dim_features=X.shape[1],
+        net_x_arch_trunk=relu_network((100, 100)),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        base_distribution=tfd.Normal(loc=0, scale=1),
+        optimizer=Adam(),
+        # kwds:
+        model_type=ModelType.INTER,
+        network_default=nonneg_tanh_network([50, 50, 10]),
+        top_layer=layer_nonneg_lin(units=1),
+    )
+    print(mod.summary())
+
+    callback = EarlyStopping(patience=250, monitor='val_logLik', restore_best_weights=True)
+
+    mod.fit(x=[X, y], y=y, batch_size=32, epochs=1000, validation_split=0.1, callbacks=[callback],
+            verbose=1)
+    pred = mod.predict([X, y])
+    logLik = -mod.evaluate([X, y], y) / X.shape[0]
+
+    P = pred.reshape((11, -1))
+    for i in range(P.shape[1]):
+        plt.plot(P[:, i], '-')
+    plt.show()
+
 
 
 def run_ls(X, y):
