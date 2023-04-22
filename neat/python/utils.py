@@ -2,10 +2,12 @@ from enum import Enum
 from typing import Iterable
 
 import tensorflow as tf
-from keras import constraints, initializers
-from keras.layers import Concatenate, Dense, Input
-from keras.optimizers import Adam, Optimizer
+from tensorflow.keras import constraints, initializers
+from tensorflow.keras.layers import Concatenate, Dense, Input
+from tensorflow.keras.optimizers import Adam, Optimizer
+from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow_probability import distributions as tfd
+import numpy as np
 
 from monolayers import MonoMultiLayer, mono_trafo_multi
 from neat_model_class import NEATModel
@@ -163,21 +165,21 @@ def load_data(data_path) -> tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Data
     :returns: tuple containing train, test and validation data as tf.data.Dataset
 
     """
-    ds = tf.data.Dataset.from_tensor_slices
+    # ds = tf.data.Dataset.from_tensor_slices
     shape_x = (1000, 3)
     shape_y = (1000, 1)
     return (
         (
-            ds(tf.random.uniform(shape_x)),
-            ds(tf.random.uniform(shape_y)),
+            np.random.normal(size=shape_x),
+            np.random.normal(size=shape_y),
         ),
         (
-            ds(tf.random.uniform(shape_x)),
-            ds(tf.random.uniform(shape_y)),
+            np.random.normal(size=shape_x),
+            np.random.normal(size=shape_y),
         ),
         (
-            ds(tf.random.uniform(shape_x)),
-            ds(tf.random.uniform(shape_y)),
+            np.random.normal(size=shape_x),
+            np.random.normal(size=shape_y),
         ),
     )
 
@@ -188,7 +190,9 @@ def fit(seed, epochs, train_data, val_data, **params):
     neat_model = get_neat_model(**params)
 
     # TODO: Add Callbacks for Early Stopping
-    hist = neat_model.fit(x=train_data, val_data=val_data, epochs=epochs)
+    callback = EarlyStopping(patience=5, monitor='val_logLik', restore_best_weights=True)
+    # hist = neat_model.fit(x=[train_data[0], train_data[1]], y=train_data[1], validation_data=val_data, validation_batch_size=len(val_data[0]), epochs=epochs, callbacks=[callback])
+    hist = neat_model.fit(x=[train_data[0], train_data[1]], y=train_data[1], validation_split=0.1, epochs=epochs, callbacks=[callback])
 
     return hist, neat_model
 

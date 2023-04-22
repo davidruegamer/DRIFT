@@ -34,7 +34,7 @@ from utils import (
     fit,
     layer_inverse_exp,
     load_data,
-    nonneg_tanh_network, layer_nonneg_lin,
+    nonneg_tanh_network, layer_nonneg_lin, relu_network
 )
 
 if __name__ == "__main__":
@@ -89,16 +89,17 @@ if __name__ == "__main__":
 
     common_kwds = dict(
         dim_features=3,
-        net_x_arch_trunk=hp.choice(
-            "net_x_arch_trunk",
-            [
-                feature_specific_network(
-                    size=s,
-                    default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
-                )
-                for s in [(64, 64, 32), (16, 16, 32)]
-            ],
-        ),
+        # net_x_arch_trunk=hp.choice(
+        #     "net_x_arch_trunk",
+        #     [
+        #         feature_specific_network(
+        #             size=s,
+        #             default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+        #         )
+        #         for s in [(64, 64, 32), (16, 16, 32)]
+        #     ],
+        # ),
+        net_x_arch_trunk=relu_network((100, 100)),
         net_y_size_trunk=hp.choice(
             "net_y_size_trunk",
             [nonneg_tanh_network(s) for s in [(50, 50, 10), (25, 25, 10)]],
@@ -116,17 +117,17 @@ if __name__ == "__main__":
                 sd_top_layer=layer_inverse_exp(units=1),
                 top_layer=layer_nonneg_lin(units=1),
             ),
-            dict(
-                **common_kwds,
-                model_type=ModelType.INTER,
-                network_default=nonneg_tanh_network([50, 50, 10]),
-                top_layer=layer_nonneg_lin(units=1),
-            ),
-            dict(
-                **common_kwds,
-                model_type=ModelType.TP,
-                output_dim=1,
-            ),
+            # dict(
+            #     **common_kwds,
+            #     model_type=ModelType.INTER,
+            #     network_default=nonneg_tanh_network([50, 50, 10]),
+            #     top_layer=layer_nonneg_lin(units=1),
+            # ),
+            # dict(
+            #     **common_kwds,
+            #     model_type=ModelType.TP,
+            #     output_dim=1,
+            # ),
         ],
     )
 
@@ -140,29 +141,29 @@ if __name__ == "__main__":
     train_data, val_data, test_data = load_data(args.data_path)
 
     def F(params):
-        if args._10sec:
-            params["fit_kwds"].update({"epochs": 1})
-            params["data_points"] = 25
+        # if args._10sec:
+        #     params["fit_kwds"].update({"epochs": 1})
+        #     params["data_points"] = 25
 
         mlflow.start_run(
-            experiment_id=experiment_id, nested=mlflow.active_run() is not None
+            experiment_id=experiment_id._experiment_id, nested=mlflow.active_run() is not None
         )
-        mlflow.log_params(dict(args))
+        mlflow.log_params(vars(args))
         mlflow.log_params(
             dict(filter(lambda kw: not isinstance(kw[1], dict), params.items()))
         )
-        mlflow.log_params(params["fit_kwds"])
+        # mlflow.log_params(params["fit_kwds"])
 
         hist, neat_model = fit(
             seed=args.seed,
-            epochs=1000,
+            epochs=100,
             train_data=train_data,
             val_data=val_data,
             **params,
         )
         # mlflow.log_artifacts(artifacts_path)
 
-        loss = min(hist.history["val_loss"])
+        loss = min(hist.history["val_logLik"])
         status = STATUS_OK
         if np.isnan(loss).any():
             status = STATUS_FAIL
@@ -176,7 +177,7 @@ if __name__ == "__main__":
         algo=tpe.suggest,
         max_evals=2 if args._10sec else 50,
         trials=trials,
-        rstate=np.random.RandomState(args.seed),
+        rstate=np.random.default_rng(args.seed)
     )
     mlflow.log_params(best)
     mlflow.log_metric("best_score", min(trials.losses()))
