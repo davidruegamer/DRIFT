@@ -2,6 +2,10 @@
 .python-version
 __pycache__
 
+mlruns
+
+*.log
+
 # History files
 .Rhistory
 .Rapp.history

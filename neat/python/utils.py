@@ -20,10 +20,14 @@ class ModelType(Enum):
     INTER = "inter"
 
 
-def mlp_with_default_layer(size: Iterable[int], default_layer: callable) -> callable:
+def mlp_with_default_layer(
+    size: Iterable[int], default_layer: callable, dropout: float = 0
+) -> callable:
     def inner(inp):
         x = default_layer(units=size[0])(inp)
         for i in range(1, len(size)):
+            if dropout != 0:
+                x = Dropout(dropout)(x)
             x = default_layer(units=size[i])(x)
         return x
 
@@ -67,7 +71,8 @@ def layer_nonneg_lin(units: int, **kwargs) -> callable:
         kernel_constraint=constraints.non_neg(),
         kernel_initializer=initializers.RandomUniform(minval=0, maxval=1),
         units=units,
-        **kwargs)
+        **kwargs,
+    )
 
 
 def nonneg_tanh_network(size: int) -> callable:
@@ -143,7 +148,9 @@ def get_neat_model(
     elif model_type == ModelType.LS:
         outp = locscale_network(net_y_size_trunk(inpY), outpX, **kwds)
     elif model_type == ModelType.INTER:
-        outp = interconnected_network(inpY, outpX, **kwds)
+        outp = interconnected_network(
+            inpY, outpX, network_default=net_y_size_trunk, **kwds
+        )
     else:
         raise ValueError("model_type must be one of ModelType")
 
@@ -157,43 +164,21 @@ def get_neat_model(
     return model
 
 
-def load_data(data_path) -> tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
-    """loads the benchmark data from the given path.
-
-    :param data_path: path to folder containing data
-    :type data_path: str
-    :returns: tuple containing train, test and validation data as tf.data.Dataset
-
-    """
-    # ds = tf.data.Dataset.from_tensor_slices
-    shape_x = (1000, 3)
-    shape_y = (1000, 1)
-    return (
-        (
-            np.random.normal(size=shape_x),
-            np.random.normal(size=shape_y),
-        ),
-        (
-            np.random.normal(size=shape_x),
-            np.random.normal(size=shape_y),
-        ),
-        (
-            np.random.normal(size=shape_x),
-            np.random.normal(size=shape_y),
-        ),
-    )
-
-
 def fit(seed, epochs, train_data, val_data, **params):
     tf.random.set_seed(seed)
 
-    neat_model = get_neat_model(**params)
+    neat_model = get_neat_model(dim_features=train_data[0].shape[1], **params)
 
-    # TODO: Add Callbacks for Early Stopping
-    callback = EarlyStopping(patience=5, monitor='val_logLik', restore_best_weights=True)
-    # hist = neat_model.fit(x=[train_data[0], train_data[1]], y=train_data[1], validation_data=val_data, validation_batch_size=len(val_data[0]), epochs=epochs, callbacks=[callback])
-    hist = neat_model.fit(x=[train_data[0], train_data[1]], y=train_data[1], validation_split=0.1, epochs=epochs, callbacks=[callback])
-
+    callback = EarlyStopping(
+        patience=100, monitor="val_logLik", restore_best_weights=True
+    )
+    hist = neat_model.fit(
+        x=train_data,
+        y=train_data[1],
+        validation_data=(val_data, val_data[1]),
+        epochs=epochs,
+        callbacks=[callback],
+    )
     return hist, neat_model
 
 

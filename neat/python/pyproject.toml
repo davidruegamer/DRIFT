@@ -13,6 +13,7 @@ matplotlib = "^3.7.1"
 mlflow = "^2.2.2"
 pandas = "^2.0.0"
 hyperopt = "^0.2.7"
+fire = "^0.5.0"
 
 
 [build-system]
