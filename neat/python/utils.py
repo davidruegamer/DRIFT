@@ -135,7 +135,7 @@ def get_neat_model(
     inpY = Input(shape=(1,))
 
     # (intermediate) outputs
-    outpX = net_x_arch_trunk(inpX) # shape (#n, dim_features*last_default_layer)
+    outpX = net_x_arch_trunk(inpX)  # shape (#n, dim_features*last_default_layer)
 
     # outputs
     if model_type == ModelType.TP:
