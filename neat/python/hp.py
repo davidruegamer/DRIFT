@@ -1,20 +1,8 @@
-#!/usr/bin/env python3
-# -*- time-stamp-pattern: "changed[\s]+:[\s]+%%$"; -*-
-# AUTHOR INFORMATION ##########################################################
-# file    : hyperopt.py
-# author  : Marcel Arpogaus <marcel dot arpogaus at gmail dot com>
-#
-# created : 2021-05-10 17:59:17 (Marcel Arpogaus)
-# changed : 2023-04-18 14:43:04 (Marcel Arpogaus)
-# DESCRIPTION #################################################################
-# ...
-# LICENSE #####################################################################
-# ...
-###############################################################################
 import inspect
 import logging
 import os
 import sys
+from itertools import product
 
 import matplotlib.pyplot as plt
 import mlflow
@@ -41,44 +29,57 @@ from utils import (
 
 def run(
     data_path: str = None,
-    fast: bool = True,
+    fast: bool = False,
     seed: int = 1,
     log_file: str = "train.log",
     log_level: str = "info",
 ):
-    experiment_name = "neat"
+    if data_path is None:
+        data_sets = get_dataset_names()
+        for data_path in data_sets:
+            run_single(data_path, fast, seed, log_file, log_level)
+    else:
+        run_single(data_path, fast, seed, log_file, log_level)
 
+
+def run_single(
+    data_path: str,
+    fast: bool,
+    seed: int,
+    log_file: str,
+    log_level: str,
+) -> None:
     setup_logger(log_file, log_level)
 
     logging.info(f"TFP Version {tfp.__version__}")
     logging.info(f"TF  Version {tf.__version__}")
 
     set_seeds(seed)
-    setup_folders(experiment_name)
+    setup_folders(data_path)
 
-    common_kwds = get_common_kwds()
-    space = get_search_space(common_kwds, fast)
+    hp_space = get_hp_space()
 
     mlflow.autolog()
-    mlflow.start_run(run_name="hypeopt")
+    mlflow.start_run(run_name=data_path)
 
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
     arg_vals = {arg: values[arg] for arg in args}
+    mlflow.log_params(arg_vals)
 
-    fit_func = get_fit_func(experiment_name, seed, data_path, fast, arg_vals)
+    fit_func = get_fit_func(seed, data_path, fast, arg_vals)
 
     trials = Trials()
     best = fmin(
         fit_func,
-        space,
+        hp_space,
         algo=tpe.suggest,
-        max_evals=2 if fast else 50,
+        max_evals=2 if fast else 500,
         trials=trials,
         rstate=np.random.default_rng(seed),
     )
-    # mlflow.log_params(best)
-    # mlflow.log_metric("best_score", min(trials.losses()))
+    mlflow.log_params(best)
+    mlflow.log_metric("best_score", min(trials.losses()))
     mlflow.log_dict(trials.trials, "trials.yaml")
 
     # plot_result(trials)
@@ -102,11 +103,11 @@ def plot_result(trials):
     mlflow.log_figure(fig, "hyperopt.png")
 
 
-def get_fit_func(experiment_name, seed, data_path, fast, args) -> callable:
+def get_fit_func(seed, data_path, fast, args) -> callable:
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
-    experiment_id = mlflow.set_experiment(experiment_name)
+    experiment_id = mlflow.set_experiment(f"{data_path}_runs")
 
     def fit_func(params):
         mlflow.start_run(
@@ -117,6 +118,10 @@ def get_fit_func(experiment_name, seed, data_path, fast, args) -> callable:
         mlflow.log_params(
             dict(filter(lambda kw: not isinstance(kw[1], dict), params.items()))
         )
+
+        model_type = params["model_type"]
+        model_kwargs = get_model_kwargs(model_type)
+        params = {**params, **model_kwargs}
 
         hist, neat_model = fit(
             seed=seed,
@@ -136,46 +141,42 @@ def get_fit_func(experiment_name, seed, data_path, fast, args) -> callable:
     return fit_func
 
 
-def get_common_kwds():
-    common_kwds = dict(
-        net_x_arch_trunk=relu_network(
-            (100, 100)
-        ),  # units(20, 100), layers(1,2), dropout(0, 0.1)
+def get_hp_space():
+    dropout_vals = [0, 0.1]
+    x_unit_vals = [20, 50, 100]
+    x_layer_vals = [1, 2]
+    y_base_unit_vals = [20, 50, 100]
+    y_top_unit_vals = [5, 10, 20]
+    learning_rates = [1e-2, 1e-3, 1e-4]
+
+    space = dict(
+        net_x_arch_trunk=hp.choice(
+            "net_x_arch_trunk",
+            [
+                relu_network(
+                    [x_units] * x_layers,
+                    dropout=dropout,
+                )
+                for x_units, x_layers, dropout in product(
+                    x_unit_vals, x_layer_vals, dropout_vals
+                )
+            ],
+        ),
         net_y_size_trunk=hp.choice(
             "net_y_size_trunk",
-            [nonneg_tanh_network(s) for s in [(50, 50, 10), (25, 25, 10)]],
+            [
+                nonneg_tanh_network(
+                    (y_base_units, y_base_units, y_top_units),
+                    dropout=dropout,
+                )
+                for y_base_units, y_top_units, dropout in product(
+                    y_base_unit_vals, y_top_unit_vals, dropout_vals
+                )
+            ],
         ),
-        base_distribution=tfd.Normal(loc=0, scale=1),  # keep fixed
-        optimizer=Adam(),  # learning rate
-    )
-    return common_kwds
-
-
-# {25, 50, 100} * 2, {5, 10, 20}  # dropout(0, 0.1)?
-
-
-def get_search_space(common_kwds, fast):
-    space = hp.choice(
-        "params",
-        [
-            dict(
-                **common_kwds,
-                model_type=ModelType.LS,
-                mu_top_layer=Dense(units=1),
-                sd_top_layer=layer_inverse_exp(units=1),
-                top_layer=layer_nonneg_lin(units=1),
-            ),
-            dict(
-                **common_kwds,
-                model_type=ModelType.INTER,
-                top_layer=layer_nonneg_lin(units=1),
-            ),
-            # dict(
-            #     **common_kwds,
-            #     model_type=ModelType.TP,
-            #     output_dim=1,
-            # ),
-        ],
+        base_distribution=tfd.Normal(loc=0, scale=1),
+        optimizer=hp.choice("optimizer", [Adam(lr) for lr in learning_rates]),
+        model_type=hp.choice("model_type", [ModelType.LS, ModelType.INTER]),
     )
     return space
 
@@ -184,12 +185,25 @@ def setup_logger(log_file: str, log_level: str) -> None:
     # Configure logging
     logging.basicConfig(
         level=log_level.upper(),
-        # format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
             logging.FileHandler(log_file),
             logging.StreamHandler(sys.stdout),
         ],
     )
+
+
+def get_model_kwargs(model_type: ModelType):
+    model_kwargs = {
+        ModelType.LS: dict(
+            mu_top_layer=Dense(units=1),
+            sd_top_layer=layer_inverse_exp(units=1),
+            top_layer=layer_nonneg_lin(units=1),
+        ),
+        ModelType.INTER: dict(
+            top_layer=layer_nonneg_lin(units=1),
+        ),
+    }
+    return model_kwargs[model_type]
 
 
 def set_seeds(seed: int) -> None:
@@ -206,6 +220,21 @@ def setup_folders(experiment_name: str) -> None:
         os.makedirs(metrics_path)
     if not os.path.exists(artifacts_path):
         os.makedirs(artifacts_path)
+
+
+def get_dataset_names() -> list[str]:
+    return [
+        "airfoil",
+        "boston",
+        "concrete",
+        "diabetes",
+        "energy",
+        "fish",
+        "forest_fire",
+        "ltfsid",
+        "real",
+        "yacht",
+    ]
 
 
 if __name__ == "__main__":

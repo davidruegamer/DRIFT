@@ -1,13 +1,12 @@
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import tensorflow as tf
-from tensorflow.keras import constraints, initializers
-from tensorflow.keras.layers import Concatenate, Dense, Input
-from tensorflow.keras.optimizers import Adam, Optimizer
-from tensorflow.keras.callbacks import EarlyStopping
+from keras import constraints, initializers
+from keras.callbacks import EarlyStopping
+from keras.layers import Concatenate, Dense, Input, Dropout
+from keras.optimizers import Adam, Optimizer
 from tensorflow_probability import distributions as tfd
-import numpy as np
 
 from monolayers import MonoMultiLayer, mono_trafo_multi
 from neat_model_class import NEATModel
@@ -21,12 +20,12 @@ class ModelType(Enum):
 
 
 def mlp_with_default_layer(
-    size: Iterable[int], default_layer: callable, dropout: float = 0
+    size: Sequence[int], default_layer: callable, dropout: float
 ) -> callable:
     def inner(inp):
         x = default_layer(units=size[0])(inp)
         for i in range(1, len(size)):
-            if dropout != 0:
+            if dropout > 0:
                 x = Dropout(dropout)(x)
             x = default_layer(units=size[i])(x)
         return x
@@ -34,20 +33,23 @@ def mlp_with_default_layer(
     return inner
 
 
-def relu_network(size: Iterable[int]) -> callable:
+def relu_network(size: Iterable[int], dropout: float) -> callable:
     return mlp_with_default_layer(
-        size, default_layer=lambda **kwargs: Dense(activation="relu", **kwargs)
+        size,
+        default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+        dropout=dropout,
     )
 
 
 def feature_specific_network(
     size: Iterable[int],
     default_layer: callable,
+    dropout: float,
 ) -> callable:
     def inner(x):
         return Concatenate(axis=1)(
             [
-                mlp_with_default_layer(size, default_layer)(xx)
+                mlp_with_default_layer(size, default_layer, dropout=dropout)(xx)
                 for xx in tf.split(x, num_or_size_splits=x.shape[1], axis=1)
             ]
         )
@@ -75,8 +77,10 @@ def layer_nonneg_lin(units: int, **kwargs) -> callable:
     )
 
 
-def nonneg_tanh_network(size: int) -> callable:
-    return mlp_with_default_layer(size, default_layer=layer_nonneg_tanh)
+def nonneg_tanh_network(size: int, dropout: float) -> callable:
+    return mlp_with_default_layer(
+        size, default_layer=layer_nonneg_tanh, dropout=dropout
+    )
 
 
 def tensorproduct_network(inpY, inpX, output_dim):
@@ -188,8 +192,9 @@ if __name__ == "__main__":
         net_x_arch_trunk=feature_specific_network(
             size=(64, 64, 32),
             default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+            dropout=0,
         ),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:
@@ -204,13 +209,13 @@ if __name__ == "__main__":
         net_x_arch_trunk=feature_specific_network(
             size=(64, 64, 32),
             default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+            dropout=0,
         ),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:
         model_type=ModelType.INTER,
-        network_default=nonneg_tanh_network([50, 50, 10]),
         top_layer=layer_nonneg_lin(units=1),
     )
     neat_model.summary()
@@ -220,8 +225,9 @@ if __name__ == "__main__":
         net_x_arch_trunk=feature_specific_network(
             size=(64, 64, 32),
             default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+            dropout=0,
         ),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds

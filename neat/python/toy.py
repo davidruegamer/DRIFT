@@ -17,16 +17,19 @@ from utils import (
 
 def run_toy_example():
     X, y = get_toy_data()
-    run_tp(X, y)
-    run_ls(X, y)
-    run_inter(X, y)
+    log_tp = run_tp(X, y)
+    log_ls = run_ls(X, y)
+    log_inter = run_inter(X, y)
+    assert log_tp < 250
+    assert log_ls < 250
+    assert log_inter < 250
 
 
 def run_tp(X, y):
     mod = get_neat_model(
         dim_features=X.shape[1],
-        net_x_arch_trunk=relu_network((100, 100)),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_x_arch_trunk=relu_network((100, 100), dropout=0),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:
@@ -56,12 +59,14 @@ def run_tp(X, y):
         plt.plot(P[:, i], "-")
     plt.show()
 
+    return logLik
+
 
 def run_inter(X, y):
     mod = get_neat_model(
         dim_features=X.shape[1],
-        net_x_arch_trunk=relu_network((100, 100)),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_x_arch_trunk=relu_network((100, 100), dropout=0),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:
@@ -91,13 +96,15 @@ def run_inter(X, y):
         plt.plot(P[:, i], "-")
     plt.show()
 
+    return logLik
+
 
 def run_ls(X, y):
     # Model types comparison
     mod = get_neat_model(
         dim_features=X.shape[1],
-        net_x_arch_trunk=relu_network((100, 100)),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10]),
+        net_x_arch_trunk=relu_network((100, 100), dropout=0),
+        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:
@@ -127,6 +134,8 @@ def run_ls(X, y):
     for i in range(P.shape[1]):
         plt.plot(P[:, i], "-")
     plt.show()
+
+    return logLik
 
 
 def get_toy_data():
