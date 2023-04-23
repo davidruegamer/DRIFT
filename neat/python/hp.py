@@ -74,7 +74,7 @@ def run_single(
         fit_func,
         hp_space,
         algo=tpe.suggest,
-        max_evals=2 if fast else 500,
+        max_evals=5 if fast else 5,
         trials=trials,
         rstate=np.random.default_rng(seed),
     )
@@ -103,6 +103,21 @@ def plot_result(trials):
     mlflow.log_figure(fig, "hyperopt.png")
 
 
+def log_fit_params(args, params):
+    mlflow.log_params(args)
+    mlflow.log_params(
+        dict(filter(lambda kw: not isinstance(kw[1], dict), params.items()))
+    )
+
+    mlflow.log_param("x_units", params["net_x_arch_trunk_args"]["x_units"])
+    mlflow.log_param("x_layers", params["net_x_arch_trunk_args"]["x_layers"])
+    mlflow.log_param("x_dropout", params["net_x_arch_trunk_args"]["dropout"])
+    mlflow.log_param("y_top_units", params["net_y_size_trunk_args"]["y_top_units"])
+    mlflow.log_param("y_base_units", params["net_y_size_trunk_args"]["y_base_units"])
+    mlflow.log_param("y_dropout", params["net_y_size_trunk_args"]["dropout"])
+    mlflow.log_param("learning_rate", params["optimizer"].learning_rate.numpy())
+
+
 def get_fit_func(seed, data_path, fast, args) -> callable:
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
@@ -114,14 +129,22 @@ def get_fit_func(seed, data_path, fast, args) -> callable:
             experiment_id=experiment_id._experiment_id,
             nested=mlflow.active_run() is not None,
         )
-        mlflow.log_params(args)
-        mlflow.log_params(
-            dict(filter(lambda kw: not isinstance(kw[1], dict), params.items()))
-        )
+
+        log_fit_params(args, params)
 
         model_type = params["model_type"]
         model_kwargs = get_model_kwargs(model_type)
         params = {**params, **model_kwargs}
+
+        x_args = params.pop("net_x_arch_trunk_args")
+        params["net_x_arch_trunk"] = relu_network(
+            [x_args["x_units"]] * x_args["x_layers"], dropout=x_args["dropout"]
+        )
+        y_args = params.pop("net_y_size_trunk_args")
+        params["net_y_size_trunk"] = nonneg_tanh_network(
+            (y_args["y_base_units"], y_args["y_base_units"], y_args["y_top_units"]),
+            dropout=y_args["dropout"],
+        )
 
         hist, neat_model = fit(
             seed=seed,
@@ -141,35 +164,35 @@ def get_fit_func(seed, data_path, fast, args) -> callable:
 
 
 def get_hp_space():
-    dropout_vals = [0, 0.1]
-    x_unit_vals = [20, 50, 100]
-    x_layer_vals = [1, 2]
-    y_base_unit_vals = [20, 50, 100]
-    y_top_unit_vals = [5, 10, 20]
+    dropout = [0, 0.1]
+    x_unit = [20, 50, 100]
+    x_layer = [1, 2]
+    y_base_unit = [20, 50, 100]
+    y_top_unit = [5, 10, 20]
     learning_rates = [1e-2, 1e-3, 1e-4]
 
     space = dict(
-        net_x_arch_trunk=hp.choice(
-            "net_x_arch_trunk",
+        net_x_arch_trunk_args=hp.choice(
+            "net_x_arch_trunk_args",
             [
-                relu_network(
-                    [x_units] * x_layers,
-                    dropout=dropout,
-                )
-                for x_units, x_layers, dropout in product(
-                    x_unit_vals, x_layer_vals, dropout_vals
-                )
+                {
+                    "x_units": x_unit,
+                    "x_layers": x_layer,
+                    "dropout": dropout,
+                }
+                for (x_unit, x_layer, dropout) in product(x_unit, x_layer, dropout)
             ],
         ),
-        net_y_size_trunk=hp.choice(
-            "net_y_size_trunk",
+        net_y_size_trunk_args=hp.choice(
+            "net_y_size_trunk_args",
             [
-                nonneg_tanh_network(
-                    (y_base_units, y_base_units, y_top_units),
-                    dropout=dropout,
-                )
-                for y_base_units, y_top_units, dropout in product(
-                    y_base_unit_vals, y_top_unit_vals, dropout_vals
+                {
+                    "y_base_units": y_base_unit,
+                    "y_top_units": y_top_unit,
+                    "dropout": dropout,
+                }
+                for (y_base_unit, y_top_unit, dropout) in product(
+                    y_base_unit, y_top_unit, dropout
                 )
             ],
         ),
