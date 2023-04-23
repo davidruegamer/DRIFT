@@ -130,6 +130,7 @@ def get_fit_func(seed, data_path, fast, args) -> callable:
             val_data=val_data,
             **params,
         )
+        loss = min(hist.history["val_logLik"])
         status = STATUS_OK
         if np.isnan(loss).any():
             status = STATUS_FAIL
