@@ -4,10 +4,8 @@ import os
 import sys
 from itertools import product
 
-import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import tensorflow_probability as tfp
 from fire import Fire
@@ -74,7 +72,7 @@ def run_single(
         fit_func,
         hp_space,
         algo=tpe.suggest,
-        max_evals=5 if fast else 5,
+        max_evals=2 if fast else 1000,
         trials=trials,
         rstate=np.random.default_rng(seed),
     )
@@ -82,25 +80,7 @@ def run_single(
     mlflow.log_metric("best_score", min(trials.losses()))
     mlflow.log_dict(trials.trials, "trials.yaml")
 
-    # plot_result(trials)
     mlflow.end_run()
-
-
-def plot_result(trials):
-    tpe_results = np.array(
-        [
-            [x["result"]["loss"]]
-            + [h[0] if len(h) else np.nan for h in x["misc"]["vals"].values()]
-            for x in trials.trials
-        ]
-    )
-    hps = [c for c in trials.trials[0]["misc"]["vals"].keys()]
-    columns = ["loss"] + hps
-    tpe_results_df = pd.DataFrame(tpe_results, columns=columns)
-    fig, ax = plt.subplots(2, 1, figsize=(16, 8))
-    tpe_results_df[["loss"]].plot(ax=ax[0])
-    tpe_results_df[hps].plot(ax=ax[1])
-    mlflow.log_figure(fig, "hyperopt.png")
 
 
 def log_fit_params(args, params):
