@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from fire import Fire
-from hyperopt import STATUS_FAIL, STATUS_OK, Trials, fmin, hp, tpe
+from hyperopt import STATUS_FAIL, STATUS_OK, fmin, hp, tpe, SparkTrials
 from keras.layers import Dense
 from keras.optimizers import Adam
 from tensorflow_probability import distributions as tfd
@@ -67,18 +67,18 @@ def run_single(
 
     fit_func = get_fit_func(seed, data_path, fast, arg_vals)
 
-    trials = Trials()
+    spark_trials = SparkTrials(parallelism=os.cpu_count())
     best = fmin(
         fit_func,
         hp_space,
         algo=tpe.suggest,
-        max_evals=2 if fast else 1000,
-        trials=trials,
+        max_evals=2 if fast else 1_000,
+        trials=spark_trials,
         rstate=np.random.default_rng(seed),
     )
     mlflow.log_params(best)
-    mlflow.log_metric("best_score", min(trials.losses()))
-    mlflow.log_dict(trials.trials, "trials.yaml")
+    mlflow.log_metric("best_score", min(spark_trials.losses()))
+    mlflow.log_dict(spark_trials.trials, "trials.yaml")
 
     mlflow.end_run()
 
@@ -133,6 +133,10 @@ def get_fit_func(seed, data_path, fast, args) -> callable:
             val_data=val_data,
             **params,
         )
+
+        mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
+        mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
+
         loss = min(hist.history["val_logLik"])
         status = STATUS_OK
         if np.isnan(loss).any():
