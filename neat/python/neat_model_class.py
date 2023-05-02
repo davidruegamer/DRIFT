@@ -1,5 +1,5 @@
-from tensorflow_probability import distributions as tfd
 import tensorflow as tf
+from tensorflow_probability import distributions as tfd
 
 
 class NEATModel(tf.keras.Model):
@@ -20,8 +20,7 @@ class NEATModel(tf.keras.Model):
             x, y = data
 
             # Create tensor that you will watch
-            x = tf.convert_to_tensor(x, dtype=tf.float32)
-            y = tf.convert_to_tensor(y, dtype=tf.float32)
+            x = list(map(lambda xx: tf.convert_to_tensor(xx, dtype=tf.float32), x))
 
             # Watch x and y
             tape.watch(x)
@@ -31,8 +30,8 @@ class NEATModel(tf.keras.Model):
             h = self(x, training=True)
 
             # Gradient and the corresponding loss function
-            h_prime = tape.gradient(h, y)
-            loss_value = self.loss_fn_unnorm(y, h)
+            h_prime = tape.gradient(h, x[1])
+            loss_value = self.loss_fn_unnorm(x[1], h)
             logLik = tf.reduce_sum(
                 tf.subtract(
                     loss_value,
@@ -53,20 +52,17 @@ class NEATModel(tf.keras.Model):
             x, y = data
 
             # Create tensor that you will watch
-            x = tf.convert_to_tensor(x, dtype=tf.float32)
-            y = tf.convert_to_tensor(y, dtype=tf.float32)
+            x = list(map(lambda xx: tf.convert_to_tensor(xx, dtype=tf.float32), x))
 
-            # Watch x and y
             tape.watch(x)
-            tape.watch(y)
 
             # Feed forward
             h = self(x, training=False)
 
             # Gradient and the corresponding loss function
-            h_prime = tape.gradient(h, y)
+            h_prime = tape.gradient(h, x[1])
 
-            loss_value = self.loss_fn_unnorm(y, h)
+            loss_value = self.loss_fn_unnorm(x[1], h)
             logLik = tf.reduce_sum(
                 tf.subtract(
                     loss_value,
