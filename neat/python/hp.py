@@ -3,13 +3,14 @@ import logging
 import os
 import sys
 from itertools import product
+import dask.bag as db
 
 import mlflow
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from fire import Fire
-from hyperopt import STATUS_FAIL, STATUS_OK, fmin, hp, tpe, SparkTrials
+from hyperopt import STATUS_FAIL, STATUS_OK
 from keras.layers import Dense
 from keras.optimizers import Adam
 from tensorflow_probability import distributions as tfd
@@ -27,23 +28,21 @@ from utils import (
 
 def run(
     data_path: str = None,
-    fast: bool = False,
-    seed: int = 1,
+    fast: bool = True,
     log_file: str = "train.log",
     log_level: str = "info",
 ):
     if data_path is None:
         data_sets = get_dataset_names()
         for data_path in data_sets:
-            run_single(data_path, fast, seed, log_file, log_level)
+            run_single(data_path, fast, log_file, log_level)
     else:
-        run_single(data_path, fast, seed, log_file, log_level)
+        run_single(data_path, fast, log_file, log_level)
 
 
 def run_single(
     data_path: str,
     fast: bool,
-    seed: int,
     log_file: str,
     log_level: str,
 ) -> None:
@@ -52,35 +51,26 @@ def run_single(
     logging.info(f"TFP Version {tfp.__version__}")
     logging.info(f"TF  Version {tf.__version__}")
 
-    set_seeds(seed)
     setup_folders(data_path)
 
     hp_space = get_hp_space()
+    hp_space = hp_space[:10] if fast else hp_space
+    logging.info(f"Size of search space: {len(hp_space)}")
 
     mlflow.autolog()
-    mlflow.start_run(run_name=data_path)
+    experiment_id = mlflow.set_experiment(f"{data_path}_runs")
 
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
     arg_vals = {arg: values[arg] for arg in args}
-    mlflow.log_params(arg_vals)
 
-    fit_func = get_fit_func(seed, data_path, fast, arg_vals)
+    fit_args = [
+        (params, data_path, experiment_id.experiment_id, arg_vals, fast) for params in hp_space
+    ]
 
-    spark_trials = SparkTrials(parallelism=os.cpu_count())
-    best = fmin(
-        fit_func,
-        hp_space,
-        algo=tpe.suggest,
-        max_evals=2 if fast else 1_000,
-        trials=spark_trials,
-        rstate=np.random.default_rng(seed),
-    )
-    mlflow.log_params(best)
-    mlflow.log_metric("best_score", min(spark_trials.losses()))
-    mlflow.log_dict(spark_trials.trials, "trials.yaml")
-
-    mlflow.end_run()
+    # parallelize using dask instead of starmap
+    b = db.from_sequence(fit_args, partition_size=1 if fast else 10)
+    b.starmap(fit_func).compute(scheduler='processes', num_workers=os.cpu_count())
 
 
 def log_fit_params(args, params):
@@ -98,93 +88,84 @@ def log_fit_params(args, params):
     mlflow.log_param("learning_rate", params["optimizer"].learning_rate.numpy())
 
 
-def get_fit_func(seed, data_path, fast, args) -> callable:
+def fit_func(params, data_path, experiment_id, args, fast):
+
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
-    experiment_id = mlflow.set_experiment(f"{data_path}_runs")
 
-    def fit_func(params):
-        mlflow.start_run(
-            experiment_id=experiment_id._experiment_id,
-            nested=mlflow.active_run() is not None,
-        )
+    mlflow.start_run(experiment_id=experiment_id)
 
-        log_fit_params(args, params)
+    log_fit_params(args, params)
 
-        model_type = params["model_type"]
-        model_kwargs = get_model_kwargs(model_type)
-        params = {**params, **model_kwargs}
+    model_type = params["model_type"]
+    model_kwargs = get_model_kwargs(model_type)
+    params = {**params, **model_kwargs}
 
-        x_args = params.pop("net_x_arch_trunk_args")
-        params["net_x_arch_trunk"] = relu_network(
-            [x_args["x_units"]] * x_args["x_layers"], dropout=x_args["dropout"]
-        )
-        y_args = params.pop("net_y_size_trunk_args")
-        params["net_y_size_trunk"] = nonneg_tanh_network(
-            (y_args["y_base_units"], y_args["y_base_units"], y_args["y_top_units"]),
-            dropout=y_args["dropout"],
-        )
+    x_args = params.pop("net_x_arch_trunk_args")
+    params["net_x_arch_trunk"] = relu_network(
+        [x_args["x_units"]] * x_args["x_layers"], dropout=x_args["dropout"]
+    )
+    y_args = params.pop("net_y_size_trunk_args")
+    params["net_y_size_trunk"] = nonneg_tanh_network(
+        (y_args["y_base_units"], y_args["y_base_units"], y_args["y_top_units"]),
+        dropout=y_args["dropout"],
+    )
 
-        hist, neat_model = fit(
-            seed=seed,
-            epochs=10 if fast else 10_000,
-            train_data=train_data,
-            val_data=val_data,
-            **params,
-        )
+    seed = params.pop("seed")
+    set_seeds(seed)
 
-        mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
-        mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
+    hist, neat_model = fit(
+        epochs=20 if fast else 10_000,
+        train_data=train_data,
+        val_data=val_data,
+        **params,
+    )
 
-        loss = min(hist.history["val_logLik"])
-        status = STATUS_OK
-        if np.isnan(loss).any():
-            status = STATUS_FAIL
-        mlflow.end_run("FINISHED" if status == STATUS_OK else "FAILED")
-        return {"loss": loss, "status": status}
+    mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
+    mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
 
-    return fit_func
+    loss = min(hist.history["val_logLik"])
+    status = STATUS_OK
+    if np.isnan(loss).any():
+        status = STATUS_FAIL
+    mlflow.end_run("FINISHED" if status == STATUS_OK else "FAILED")
+    return {"loss": loss, "status": status}
 
 
-def get_hp_space():
+def get_hp_space() -> list[dict]:
+    seed = [1, 2, 3]
     dropout = [0, 0.1]
     x_unit = [20, 50, 100]
     x_layer = [1, 2]
     y_base_unit = [20, 50, 100]
     y_top_unit = [5, 10, 20]
     learning_rates = [1e-2, 1e-3, 1e-4]
+    model = [ModelType.LS, ModelType.INTER]
 
-    space = dict(
-        net_x_arch_trunk_args=hp.choice(
-            "net_x_arch_trunk_args",
-            [
-                {
-                    "x_units": x_unit,
-                    "x_layers": x_layer,
-                    "dropout": dropout,
-                }
-                for (x_unit, x_layer, dropout) in product(x_unit, x_layer, dropout)
-            ],
-        ),
-        net_y_size_trunk_args=hp.choice(
-            "net_y_size_trunk_args",
-            [
-                {
-                    "y_base_units": y_base_unit,
-                    "y_top_units": y_top_unit,
-                    "dropout": dropout,
-                }
-                for (y_base_unit, y_top_unit, dropout) in product(
-                    y_base_unit, y_top_unit, dropout
-                )
-            ],
-        ),
-        base_distribution=tfd.Normal(loc=0, scale=1),
-        optimizer=hp.choice("optimizer", [Adam(lr) for lr in learning_rates]),
-        model_type=hp.choice("model_type", [ModelType.LS, ModelType.INTER]),
-    )
-    return space
+    args = []
+    for i, (s, d, x_u, x_l, y_b_u, y_t_u, lr, m) in enumerate(product(
+        seed, dropout, x_unit, x_layer, y_base_unit, y_top_unit, learning_rates, model
+    )):
+
+        args.append({
+            "seed": s,
+            "net_x_arch_trunk_args": {
+                "x_units": x_u,
+                "x_layers": x_l,
+                "dropout": d,
+            },
+            "net_y_size_trunk_args": {
+                "y_base_units": y_b_u,
+                "y_top_units": y_t_u,
+                "dropout": d,
+            },
+            "optimizer": Adam(learning_rate=lr),
+            "base_distribution": tfd.Normal(loc=0, scale=1),
+            "model_type": m,
+        })
+    return args
+
 
 
 def setup_logger(log_file: str, log_level: str) -> None:

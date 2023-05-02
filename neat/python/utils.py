@@ -168,8 +168,7 @@ def get_neat_model(
     return model
 
 
-def fit(seed, epochs, train_data, val_data, **params):
-    tf.random.set_seed(seed)
+def fit(epochs, train_data, val_data, **params):
 
     neat_model = get_neat_model(dim_features=train_data[0].shape[1], **params)
 
