@@ -1,4 +1,4 @@
-p <- file.path(getwd(), "application","ts_example")
+p <- file.path(getwd(), "application","Elec")
 source(file.path(p, "utils.R"))
 
 parser <- ArgumentParser()
