@@ -10,7 +10,6 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from fire import Fire
-from hyperopt import STATUS_FAIL, STATUS_OK
 from keras.layers import Dense
 from keras.optimizers import Adam
 from tensorflow_probability import distributions as tfd
@@ -28,7 +27,7 @@ from utils import (
 
 def run(
     data_path: str = None,
-    fast: bool = True,
+    fast: bool = False,
     log_file: str = "train.log",
     log_level: str = "info",
 ):
@@ -59,6 +58,7 @@ def run_single(
 
     mlflow.autolog()
     experiment_id = mlflow.set_experiment(f"{data_path}_runs")
+
 
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
@@ -125,12 +125,7 @@ def fit_func(params, data_path, experiment_id, args, fast):
     mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
     mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
 
-    loss = min(hist.history["val_logLik"])
-    status = STATUS_OK
-    if np.isnan(loss).any():
-        status = STATUS_FAIL
-    mlflow.end_run("FINISHED" if status == STATUS_OK else "FAILED")
-    return {"loss": loss, "status": status}
+    mlflow.end_run()
 
 
 def get_hp_space() -> list[dict]:
