@@ -3,8 +3,6 @@ rm(list = ls())
 # start file from NEAT directory
 
 # set path to (conda) env
-conda_env <- "/Users/flipst3r/opt/anaconda3/envs/r-reticulate" 
-reticulate::use_condaenv(conda_env, required = TRUE)
 devtools::load_all("./neat")
 #library(tensorflow)
 #library(tfprobability)
@@ -16,7 +14,7 @@ tf$constant(1) # check TF
 
 ## Load Data and train_mod()
 
-ts_application <- file.path(getwd(), "application","ts_example")
+ts_application <- file.path(getwd(), "application","Elec")
 data_path <- file.path(ts_application, "electricity.RDS")
 source(file.path(ts_application, "utils.R"))
 

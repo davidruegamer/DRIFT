@@ -8,9 +8,15 @@ mlp_with_default_layer <- function(size, default_layer)
     
     x <- input %>% default_layer(units = size[1])
     
-    for(i in 2:length(size))
-      x <- x %>% default_layer(units = size[i])
+    if(length(size)>1){
+      
+      for(i in 2:length(size)){
+        
+        x <- x %>% default_layer(units = size[i])
+        
+      }
     
+    }
     return(x)
     
   }
@@ -85,7 +91,19 @@ layer_nonneg_lin <- function(...) layer_dense(..., activation = "linear",
                                                 keras$constraints$non_neg(),
                                               kernel_initializer = 
                                                 keras$initializers$random_uniform(minval = 0, 
-                                                                                  maxval = 1))
+                                                                                  maxval = 1),
+                                              use_bias = FALSE
+)
+
+layer_nonneg_lin_bias <- function(...) layer_dense(..., activation = "linear", 
+                                                   kernel_constraint = 
+                                                     keras$constraints$non_neg(),
+                                                   kernel_initializer = 
+                                                     keras$initializers$random_uniform(minval = 0, 
+                                                                                       maxval = 1),
+                                                   use_bias = TRUE
+)
+
 
 ### Monotonic NN
 nonneg_tanh_network <- function(size) mlp_with_default_layer(
@@ -106,7 +124,7 @@ tensorproduct_network <- function(inpY, inpX)
 interconnected_network <- function(inpY, inpX, 
                                    network_default = 
                                      nonneg_tanh_network(c(50, 50, 10)),
-                                   top_layer = layer_nonneg_lin(units = 1L))
+                                   top_layer = layer_nonneg_lin_bias(units = 1L))
 {
   
   layer_concatenate(list(inpX, inpY)) %>% 
@@ -162,7 +180,9 @@ neat <- function(
   outp <- switch (type,
     tp = tensorproduct_network(net_y_size_trunk(inpY), outpX),
     ls = locscale_network(net_y_size_trunk(inpY), outpX),
-    inter = interconnected_network(inpY, outpX)
+    inter = interconnected_network(inpY, outpX, 
+                                   network_default = 
+                                     net_y_size_trunk)
   )
   
   mod <- neat_model(list(inpX, inpY), outp, 
