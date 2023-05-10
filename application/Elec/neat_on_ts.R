@@ -1,8 +1,6 @@
 rm(list = ls())
 
 # start file from NEAT directory
-conda_env <- "/Users/flipst3r/opt/anaconda3/envs/r-reticulate"
-reticulate::use_condaenv(conda_env, required = TRUE)
 
 # set path to (conda) env
 devtools::load_all("./neat")
