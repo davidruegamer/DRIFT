@@ -1,6 +1,7 @@
 rm(list = ls())
 
 # start file from NEAT directory
+conda_env <- 
 
 # set path to (conda) env
 devtools::load_all("./neat")
@@ -54,6 +55,8 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   
   # define model
   def_mod <- function() neat(p, type = "ls",
+                             net_x_arch_trunk = function(x) x,
+                             net_y_size_trunk = nonneg_tanh_network(c(20, 20, 5)),
                              optimizer = optimizer_adam(learning_rate = 0.0001))
   m <- def_mod()
   
@@ -73,11 +76,13 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   X_tst <- predict(preProcValues, X_tst)
   
   # train_mod() defined in utils.R
-  tst_epochs <- train_mod(m,
-                          ep = max_ep, 
-                          d_tr = list(list(X_tr, y_tr), y_tr),
-                          d_val = list(list(X_tst, y_tst), y_tst), 
-                          v = 0)
+  tst_epochs <- try(train_mod(m,
+                              ep = max_ep, 
+                              d_tr = list(list(X_tr, y_tr), y_tr),
+                              d_val = list(list(X_tst, y_tst), y_tst), 
+                              v = 2), silent = T)
+  
+  if (inherits(tst_epochs, "try-error")) tst_epochs <- 1L
   
   ## predict on test with the previously determined no. of epochs
   
@@ -101,11 +106,15 @@ res <- parLapply(cl, unique(electricity$d_val_tr$id), function(idd) {
   neat_logliks <- sapply(1:reps, function(rp) {
     
     m <- def_mod() # reset model to avoid continued training
-    train_mod(m, ep = tst_epochs, 
-              d_tr = list(list(X_tr, y_tr), y_tr),
-              d_val = list(list(X_tst, y_tst), y_tst),
-              v = 0, 
-              final = TRUE, s = rp)
+    res <- try(train_mod(m, ep = tst_epochs, 
+                          d_tr = list(list(X_tr, y_tr), y_tr),
+                          d_val = list(list(X_tst, y_tst), y_tst),
+                          v = 2, 
+                          final = TRUE, s = rp), silent = T)
+    
+    if (inherits(res, "try-error")) res <- NA
+    
+    return(res)
   }, simplify = TRUE)
   
   return(neat_logliks)
