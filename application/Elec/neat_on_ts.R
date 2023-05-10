@@ -1,7 +1,8 @@
 rm(list = ls())
 
 # start file from NEAT directory
-conda_env <- 
+conda_env <- "/Users/flipst3r/opt/anaconda3/envs/r-reticulate"
+reticulate::use_condaenv(conda_env, required = TRUE)
 
 # set path to (conda) env
 devtools::load_all("./neat")
@@ -128,4 +129,4 @@ res_elec <- do.call("rbind",res) # rows have IDs and cols have reps
 attr(res_elec, "run_time") <- Sys.time() - strt
 attr(res_elec, "session_info") <- sessionInfo()
 
-saveRDS(res_elec, file = file.path(ts_application, "res_neat.RDS"))
+saveRDS(res_elec, file = file.path(ts_application, "res_neat_48.RDS"))
