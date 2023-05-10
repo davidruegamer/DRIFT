@@ -122,8 +122,8 @@ def fit_func(params, data_path, experiment_id, args, fast):
         **params,
     )
 
-    mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
-    mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
+    mlflow.log_metric("train_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
+    mlflow.log_metric("val_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
 
     mlflow.end_run()
 
