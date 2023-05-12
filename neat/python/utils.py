@@ -60,10 +60,17 @@ def feature_specific_network(
 
 
 def constraint_xavier_init(shape, dtype=None):
-    fan_in = shape[1]
-    fan_out = shape[0]
+    fan_in = shape[0]
+    fan_out = shape[1]
     limit = np.sqrt(6. / (fan_in + fan_out))
     return tf.random.uniform(shape, minval=0., maxval=limit, dtype=dtype)
+
+def constraint_xavier_p_init(shape, dtype=None):
+    fan_in = shape[0]
+    fan_out = shape[1]
+    # limit = np.sqrt(6. / (fan_in+fan_out))
+    limit = np.sqrt(9. / (np.max([fan_in, fan_out])**2))
+    return tf.random.uniform(shape, minval=0, maxval=limit, dtype=dtype)
 
 
 def layer_nonneg_tanh(units: int, **kwargs) -> callable:
@@ -71,7 +78,7 @@ def layer_nonneg_tanh(units: int, **kwargs) -> callable:
     return Dense(
         activation="tanh",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=constraint_xavier_init if kernel_initializer is None else kernel_initializer,
+        kernel_initializer=constraint_xavier_p_init if kernel_initializer is None else kernel_initializer,
         units=units,
         **kwargs,
     )
@@ -82,7 +89,7 @@ def layer_nonneg_lin(units: int, **kwargs) -> callable:
     return Dense(
         activation="linear",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=constraint_xavier_init if kernel_initializer is None else kernel_initializer,
+        kernel_initializer=constraint_xavier_p_init if kernel_initializer is None else kernel_initializer,
         units=units,
         **kwargs,
     )
