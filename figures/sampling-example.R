@@ -61,13 +61,13 @@ matplot(dy, y, type = "l", axes = FALSE, lty = 1, col = col3)
 dev.off()
 
 par(opar)
-pdf("samples.pdf", width = 4, height = 4)
+pdf("samples.pdf", width = 3.5, height = 3.5)
 set.seed(8)
 n <- 1e3
 smpl <- sapply(x, \(tx) g(rlogis(n), x = tx))
 # boxplot(smpl, col = col3, axes = FALSE, xlab = "x", ylab = "y", pch = 20, outcol = col3)
 beeswarm::beeswarm(as.data.frame(smpl), col = col3, axes = FALSE, xlab = "x",
-                   ylab = "y", pch = 20, cex = 0.5, method = "hex", corral = "wrap")
+                   ylab = "y", pch = 20, cex = 0.25, method = "hex")
 box()
 axis(1, at = 1:3, labels = x)
 axis(2, las = 1)
