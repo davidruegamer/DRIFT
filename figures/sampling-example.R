@@ -43,6 +43,47 @@ x <- c(-0.5, 0, 0.5)
 Y <- sapply(x, \(tx) g(z, tx))
 dy <- sapply(x, \(tx) dY(y, tx))
 
+library("ggplot2")
+library("ggside")
+library("patchwork")
+
+pdat <- tibble(z = z, y = y, dz = dz) %>% 
+  nest(data = everything())
+
+prdat <- tibble(x, data = pdat) %>% 
+  mutate(Y = apply(Y, 2, list), dy = apply(dy, 2, list)) %>% 
+  unnest(c(data, Y, dy)) %>% 
+  unnest(everything())
+
+p1 <- ggplot(prdat, aes(x = z, y = Y, color = factor(x))) +
+  geom_line(linewidth = 0.7) +
+  geom_xsideline(aes(x = z, y = dz, color = NULL), linewidth = 0.7) +
+  geom_ysidepoint(aes(x = dy, y = y), size = 0.01) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  theme(ggside.panel.scale.x = .4,
+        ggside.panel.scale.y = .4) +
+  labs(color = "x", x = parse(text = "epsilon"),
+       y = parse(text = "phi(epsilon,x)")) + 
+  theme(text = element_text(size = 13.5)) +
+  scale_xsidey_continuous(breaks = NULL) +
+  scale_ysidex_continuous(breaks = NULL) +
+  theme_ggside_void()
+
+set.seed(8)
+n <- 1e3
+smpl <- sapply(x, \(tx) g(rlogis(n), x = tx))
+
+p2 <- data.frame(smpl) %>% 
+  pivot_longer(X1:X3, names_to = "x", values_to = "y") %>%
+  ggplot(aes(x = x, y = y, color = x)) + 
+  ggbeeswarm::geom_beeswarm(show.legend = FALSE, alpha = 0.3) +
+  theme_minimal() + 
+  theme(text = element_text(size = 13))
+
+p1 + p2
+ggsave("inv-con-flow.pdf", height = 3.5, width = 7)
+
 opar <- par(no.readonly = TRUE)
 pdf("sampling.pdf", width = 4, height = 4)
 par(mar = rep(0.1, 4))
