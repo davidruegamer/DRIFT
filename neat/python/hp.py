@@ -131,14 +131,14 @@ def fit_func(params, data_path, experiment_id, args, fast):
 
 def get_hp_space() -> list[dict]:
     seed = [1, 2, 3]
-    dropout = [0, 0.1]
+    dropout = [0, 0.5]
     x_unit = [20, 50, 100]
     x_layer = [1, 2]
     y_base_unit = [20, 50, 100]
     y_layers = [2,5,10]
     y_top_unit = [5, 10, 20]
-    learning_rates = [1e-2, 1e-3, 1e-4]
-    model = [ModelType.LS,]
+    learning_rates = [5e-2, 1e-2, 1e-3]
+    model = [ModelType.LS, ModelType.INTER]
 
     args = []
     for i, (s, d, x_u, x_l, y_b_u, y_l, y_t_u, lr, m) in enumerate(product(
