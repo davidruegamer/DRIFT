@@ -95,6 +95,7 @@ def fit_func(params, data_path, experiment_id, args, fast):
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
 
+    mlflow.autolog()
     mlflow.start_run(experiment_id=experiment_id)
 
     log_fit_params(args, params)
