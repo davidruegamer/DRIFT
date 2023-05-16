@@ -74,22 +74,22 @@ def constraint_xavier_p_init(shape, dtype=None):
 
 
 def layer_nonneg_tanh(units: int, **kwargs) -> callable:
-    kernel_initializer = kwargs.pop('kernel_initializer', None)
+    kernel_initializer = kwargs.pop('kernel_initializer', constraint_xavier_p_init)
     return Dense(
         activation="tanh",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=constraint_xavier_p_init if kernel_initializer is None else kernel_initializer,
+        kernel_initializer=kernel_initializer,
         units=units,
         **kwargs,
     )
 
 
 def layer_nonneg_lin(units: int, **kwargs) -> callable:
-    kernel_initializer = kwargs.pop('kernel_initializer', None)
+    kernel_initializer = kwargs.pop('kernel_initializer', constraint_xavier_p_init)
     return Dense(
         activation="linear",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=constraint_xavier_p_init if kernel_initializer is None else kernel_initializer,
+        kernel_initializer=kernel_initializer,
         units=units,
         **kwargs,
     )

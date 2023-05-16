@@ -26,10 +26,10 @@ from utils import (
 
 
 def run(
-    data_path: str = None,
-    fast: bool = False,
-    log_file: str = "train.log",
-    log_level: str = "info",
+        data_path: str = None,
+        fast: bool = False,
+        log_file: str = "train.log",
+        log_level: str = "info",
 ):
     if data_path is None:
         data_sets = get_dataset_names()
@@ -40,10 +40,10 @@ def run(
 
 
 def run_single(
-    data_path: str,
-    fast: bool,
-    log_file: str,
-    log_level: str,
+        data_path: str,
+        fast: bool,
+        log_file: str,
+        log_level: str,
 ) -> None:
     setup_logger(log_file, log_level)
 
@@ -58,7 +58,6 @@ def run_single(
 
     mlflow.autolog()
     experiment_id = mlflow.set_experiment(f"{data_path}_runs")
-
 
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
@@ -90,7 +89,6 @@ def log_fit_params(args, params):
 
 
 def fit_func(params, data_path, experiment_id, args, fast):
-
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
@@ -136,16 +134,15 @@ def get_hp_space() -> list[dict]:
     x_unit = [20, 50, 100]
     x_layer = [1, 2]
     y_base_unit = [20, 50, 100]
-    y_layers = [2,5,10]
-    y_top_unit = [5, 10, 20]
-    learning_rates = [5e-2, 1e-2, 1e-3]
+    y_layers = [2, 10]
+    y_top_unit = [5, 20]
+    learning_rates = [1e-2, 5e-3, 1e-3]
     model = [ModelType.LS, ModelType.INTER]
 
     args = []
     for i, (s, d, x_u, x_l, y_b_u, y_l, y_t_u, lr, m) in enumerate(product(
-        seed, dropout, x_unit, x_layer, y_base_unit, y_layers, y_top_unit, learning_rates, model
+            seed, dropout, x_unit, x_layer, y_base_unit, y_layers, y_top_unit, learning_rates, model
     )):
-
         args.append({
             "seed": s,
             "net_x_arch_trunk_args": {
@@ -164,7 +161,6 @@ def get_hp_space() -> list[dict]:
             "model_type": m,
         })
     return args
-
 
 
 def setup_logger(log_file: str, log_level: str) -> None:
