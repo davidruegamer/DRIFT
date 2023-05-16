@@ -84,6 +84,7 @@ def log_fit_params(args, params):
     mlflow.log_param("x_dropout", params["net_x_arch_trunk_args"]["dropout"])
     mlflow.log_param("y_top_units", params["net_y_size_trunk_args"]["y_top_units"])
     mlflow.log_param("y_base_units", params["net_y_size_trunk_args"]["y_base_units"])
+    mlflow.log_param("y_layers", params["net_y_size_trunk_args"]["y_layers"])
     mlflow.log_param("y_dropout", params["net_y_size_trunk_args"]["dropout"])
     mlflow.log_param("learning_rate", params["optimizer"].learning_rate.numpy())
 
@@ -109,7 +110,7 @@ def fit_func(params, data_path, experiment_id, args, fast):
     )
     y_args = params.pop("net_y_size_trunk_args")
     params["net_y_size_trunk"] = nonneg_tanh_network(
-        (y_args["y_base_units"], y_args["y_base_units"], y_args["y_top_units"]),
+        [y_args["y_base_units"]] * y_args["y_layers"] + [y_args["y_top_units"]],
         dropout=y_args["dropout"],
     )
 
@@ -123,25 +124,26 @@ def fit_func(params, data_path, experiment_id, args, fast):
         **params,
     )
 
-    mlflow.log_metric("val_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
-    mlflow.log_metric("train_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
+    mlflow.log_metric("train_logLik", neat_model.evaluate(x=train_data, y=train_data[1]))
+    mlflow.log_metric("val_logLik", neat_model.evaluate(x=val_data, y=val_data[1]))
 
     mlflow.end_run()
 
 
 def get_hp_space() -> list[dict]:
     seed = [1, 2, 3]
-    dropout = [0, 0.1]
+    dropout = [0, 0.5]
     x_unit = [20, 50, 100]
     x_layer = [1, 2]
-    y_base_unit = [5, 10]
+    y_base_unit = [20, 50, 100]
+    y_layers = [2,5,10]
     y_top_unit = [5, 10, 20]
-    learning_rates = [1e-2, 1e-3, 1e-4]
+    learning_rates = [5e-2, 1e-2, 1e-3]
     model = [ModelType.LS, ModelType.INTER]
 
     args = []
-    for i, (s, d, x_u, x_l, y_b_u, y_t_u, lr, m) in enumerate(product(
-        seed, dropout, x_unit, x_layer, y_base_unit, y_top_unit, learning_rates, model
+    for i, (s, d, x_u, x_l, y_b_u, y_l, y_t_u, lr, m) in enumerate(product(
+        seed, dropout, x_unit, x_layer, y_base_unit, y_layers, y_top_unit, learning_rates, model
     )):
 
         args.append({
@@ -153,6 +155,7 @@ def get_hp_space() -> list[dict]:
             },
             "net_y_size_trunk_args": {
                 "y_base_units": y_b_u,
+                "y_layers": y_l,
                 "y_top_units": y_t_u,
                 "dropout": d,
             },
