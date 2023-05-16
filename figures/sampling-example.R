@@ -81,8 +81,8 @@ p2 <- data.frame(smpl) %>%
   theme_minimal() + 
   theme(text = element_text(size = 13))
 
-p1 + p2
-ggsave("inv-con-flow.pdf", height = 3.5, width = 7)
+p1
+ggsave("inv-con-flow.pdf", height = 3, width = 3)
 
 opar <- par(no.readonly = TRUE)
 pdf("sampling.pdf", width = 4, height = 4)
