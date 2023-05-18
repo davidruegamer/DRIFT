@@ -68,7 +68,8 @@ p1 <- ggplot(prdat, aes(x = z, y = Y, color = factor(x))) +
   theme(text = element_text(size = 13.5)) +
   scale_xsidey_continuous(breaks = NULL) +
   scale_ysidex_continuous(breaks = NULL) +
-  theme_ggside_void()
+  theme_ggside_void() +
+  scale_color_viridis_d()
 
 set.seed(8)
 n <- 1e3
