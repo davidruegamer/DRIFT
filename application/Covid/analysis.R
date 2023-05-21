@@ -1,18 +1,10 @@
 library(dplyr)
 library(deepregression)
 library(deeptrafo)
-devtools::load_all("~/NSL/deepoptim/")
-optimizer_alig <- function(maxlr=NULL, mom=0.0, stab=1e-5) {
-  python_path <- system.file("python", package = "deepoptim")
-  opt <- reticulate::import_from_path("optimizers", path = python_path)
-  return(opt$AliG(max_lr=maxlr, momentum=mom, eps=stab))
-}
+devtools::load_all("../../neat/")
 
 set.seed(32)
 
-# Choose size
-# size <- "small"
-size <- "large"
 save_model <- TRUE
 
 # Read data
@@ -23,47 +15,23 @@ df <- df %>%
     humid = relative_humidity
   ) %>% 
   mutate(
-    cases = log(new_confirmed * 1.0 + 1)
+    cases = new_confirmed,
+    population = log(population),
+    prevalence = log(prevalence*1000 + 1)
   ) %>% 
   filter(
     cases >=0
-  )
+) %>% sample_n(500000)
 # Train/Test
 test <- df %>% filter(date > 700)
 df <- df %>% filter(date <= 700)
 
-if(size == "small")
-{
-  
-  df <- df[sample(1:nrow(df), 5000),]
-  bs <- 32L
-  eps <- 2000L
-  
-}else{
-  
-  df <- df[sample(1:nrow(df), 1e6),]
-  bs <- 128L
-  eps <- 250L
-
-}
+# Network properties
+bs <- 128L
+eps <- 250L
 ps <- 15L
 
-
 # Define deep networks
-deep_mod <- function(x) x %>% 
-  layer_dense(units = 100, activation = "relu", use_bias = FALSE) %>% 
-  layer_dropout(rate = 0.2) %>% 
-  layer_dense(units = 100, activation = "relu") %>% 
-  layer_dropout(rate = 0.2) %>% 
-  layer_dense(units = 1)
-
-deep_mod_nam <- function(x) x %>% 
-  layer_dense(units = 20, activation = "tanh", use_bias = FALSE) %>% 
-  layer_dropout(rate = 0.2) %>% 
-  layer_dense(units = 20, activation = "tanh") %>% 
-  layer_dropout(rate = 0.2) %>% 
-  layer_dense(units = 1)
-
 feature_net <- function(x) x %>% 
   layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
   layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
@@ -92,16 +60,13 @@ feature_net_bi <- function(x){
 # Define model formulas
 form_structured <- ~ 1 + s(date) + s(population) + te(latitude, longitude) + 
   s(temp) + s(humid) 
-form_nam <- ~ 1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
-  snam(temp) + snam(humid) 
-form_sls <- cases ~ 1 + s(date) + s(population) + te(latitude, longitude) + 
-  s(temp) + s(humid) 
-form_neat <- cases  ~ 1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
-  snam(temp) + snam(humid) 
+form_nam <- ~ 1 + snam(date) + snam(population) + tenam(latitude, longitude) +
+  snam(temp) + snam(humid)
+
 
 # Init and fit models
 mod_str <- deepregression(
-  y = df$cases,
+  y = df$prevalence * 1.0,
   list_of_formulas = list(form_structured),
   data = df,
   family = "poisson",
@@ -124,7 +89,7 @@ if(file.exists("weights_str.hdf5")){
 }
 
 # 584.7298
-(metr_str <- Metrics::rmse(test$cases, mod_str %>% predict(test)))
+(metr_str <- Metrics::rmse(test$prevalence, mod_str %>% predict(test)))
 
 plotdata_str <- plot(mod_str, only_data = TRUE)
 saveRDS(plotdata_str, file = "plotdata_str.RDS")
@@ -135,10 +100,10 @@ rm(mod_str); gc(); gc()
 ### with NAM effects
 
 mod_nam <- deepregression(
-  y = df$cases,
+  y = df$prevalence * 1.0,
   list_of_formulas = list(form_nam, ~1),
   data = df,
-  list_of_deep_models = 
+  list_of_deep_models =
     list(
       snam = feature_net,
       tenam = feature_net_bi
@@ -147,20 +112,20 @@ mod_nam <- deepregression(
 )
 
 if(file.exists("weights_nam.hdf5")){
-  
+
   mod_nam$model$load_weights(filepath="weights_nam.hdf5", by_name = FALSE)
-  
+
 }else{
-  
-  hist_unc <- mod_nam %>% fit(epochs = eps, early_stopping = TRUE, 
+
+  hist_unc <- mod_nam %>% fit(epochs = eps, early_stopping = TRUE,
                                     patience = ps, batch_size = bs)
-  
+
   if(save_model)
     save_model_weights_hdf5(mod_nam$model, filepath="weights_nam.hdf5")
-  
+
 }
 
-(metr_nam <- Metrics::rmse(test$cases, mod_nam %>% predict(test)))
+(metr_nam <- Metrics::rmse(test$prevalence, mod_nam %>% predict(test)))
 # 589.0838
 
 feature_eff_nets <- keras_model(inputs = mod_nam$model$inputs,
@@ -171,7 +136,7 @@ feature_eff_nets <- keras_model(inputs = mod_nam$model$inputs,
 )
 nam_effects <- feature_eff_nets %>% predict(
   deepregression:::prepare_newdata(
-    mod_nam$init_params$parsed_formulas_contents, df, 
+    mod_nam$init_params$parsed_formulas_contents, df,
     gamdata = mod_nam$init_params$gamdata$data_trafos
   )
 )
@@ -181,94 +146,142 @@ saveRDS(nam_effects, file = "plotdata_nam.RDS")
 rm(nam_effects); gc(); gc()
 rm(mod_nam); gc(); gc()
 
-### without dist assumption
 
-mod_sls <- deeptrafo(form_sls, 
-                     response_type = "count",
-                     data = df,
-                     list_of_deep_models = NULL,
-                     orthog_options = orthog_control(orthogonalize = FALSE),
-                     optimizer = optimizer_alig(0.5, mom = 0.9)
-)
 
-if(file.exists("weights_sls.hdf5")){
+### NEAT
+
+feature_net2 <- function(x) x %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 16, activation = "relu") 
+
+feature_net_bi2 <- function(x){ 
   
-  mod_sls$model$load_weights(filepath="weights_sls.hdf5", by_name = FALSE)
+  base1 <- tf_stride_cols(x, 1) %>% 
+    layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
+    layer_dense(units = 32, activation = "relu") %>% 
+    layer_dense(units = 16, activation = "relu") %>% 
+    layer_dense(units = 5)
   
-}else{
+  base2 <- tf_stride_cols(x, 2) %>% 
+    layer_dense(units = 64, activation = "relu", use_bias = FALSE) %>% 
+    layer_dense(units = 32, activation = "relu") %>% 
+    layer_dense(units = 16, activation = "relu") %>% 
+    layer_dense(units = 5)
   
-  hist_sls <- mod_sls %>% fit(epochs = eps, early_stopping = TRUE, 
-                              patience = ps, batch_size = bs*3#, 
-                              # callbacks = callback_learning_rate_scheduler(
-                              #   tf$keras$experimental$CosineDecayRestarts(.5, 5, t_mul = 2, m_mul = .8))
-                              )
-  
-  if(save_model)
-    save_model_weights_hdf5(mod_sls$model, filepath="weights_sls.hdf5")
+  tf_row_tensor(base1, base2)
   
 }
 
-(metr_sls <- Metrics::rmse(test$cases, mod_sls %>% predict(test)))
-# 548.6764
+structured_nam_network <- function(input){
+  
+  list_of_features <- tf$split(input, 
+                               num_or_size_splits = c(1L,1L,1L,2L,1L,1L), 
+                               axis=1L)
+  funs <- list(
+    function(x) x,
+    feature_net2, feature_net2,
+    feature_net_bi2, 
+    feature_net2, feature_net2
+  )
+  
+  list_of_outputs <- lapply(1:length(list_of_features),
+                            function(i) funs[[i]](list_of_features[[i]]))
+  
+  return(layer_concatenate(list_of_outputs))
+  
+}
 
-plotdata_sls <- plot(mod_sls, only_data = TRUE)
-saveRDS(plotdata_sls, file = "plotdata_sls.RDS")
-
-rm(plotdata_sls); gc(); gc()
-rm(mod_sls); gc(); gc()
-
-### with NAM effects
-
-neat <- deeptrafo(form_neat, 
-                      response_type = "count",
-                      data = df,
-                      list_of_deep_models = list(
-                        dnn = deep_mod_nam,
-                        snam = feature_net,
-                        tenam = feature_net_bi
-                      ),
-                      orthog_options = orthog_control(orthogonalize = FALSE)
+neat_mod <- neat(dim_features = 7, type = "ls",
+                 net_y_size_trunk = nonneg_tanh_network(c(10, 10)),
+                 net_x_arch_trunk = structured_nam_network,
+                 optimizer = optimizer_adam(learning_rate = 0.0001)
 )
 
 if(file.exists("weights_neat.hdf5")){
   
-  neat$model$load_weights(filepath="weights_neat.hdf5", by_name = FALSE)
+  neat_mod$load_weights(filepath="weights_neat.hdf5", by_name = FALSE)
   
 }else{
   
-  hist_nam <- neat %>% fit(epochs = eps, early_stopping = TRUE, 
-                          patience = ps, batch_size = bs)
+  hist_neat <- neat_mod %>% fit(x = list(cbind(1, as.matrix(
+    df[,c("date", "population",
+          "latitude", "longitude",
+          "temp", "humid")])),
+    matrix(df$prevalence)), 
+    y = matrix(df$prevalence),
+    epochs = eps, 
+    callbacks = callback_early_stopping(
+      patience = ps*10, restore_best_weights = TRUE,
+      monitor = "val_logLik"
+    ),
+    view_metrics = FALSE,
+    validation_split = 0.1,
+    batch_size = bs)
   
   if(save_model)
-    save_model_weights_hdf5(neat$model, filepath="weights_neat.hdf5")
+    save_model_weights_hdf5(neat_mod, filepath="weights_neat.hdf5")
    
 }
 
-(metr_neat <- Metrics::rmse(test$cases, neat %>% predict(test)))
-# 548.5575
+pred_mod_neat <- keras_model(inputs = neat_mod$inputs,
+                             outputs = neat_mod$layers[[prelast]]$output
+)
 
-# plot_y <- seq(min(df$cases), max(df$cases), l=1000)
-# trafo_fun <- neat %>% predict(newdata = cbind(df[1:1000,-which(names(df)=="cases")], cases=plot_y), 
-#                               type = "trafo")
-# plot(trafo_fun ~ plot_y, type = "l")
-# abline(0, 1, lty=2, col="red")
+pred_neat <- pred_mod_neat %>% predict(
+  list(cbind(1,as.matrix(test[,c("date", "population",
+                               "latitude", "longitude",
+                               "temp", "humid")])),
+       matrix(test$prevalence))
+)
+(metr_neat <- Metrics::rmse(test$prevalence, pred_neat))
 
-feature_eff_nets_neat <- keras_model(inputs = neat$model$inputs,
-                                outputs = layer_concatenate(
-                                  lapply(neat$model$layers[[51]]$inbound_nodes[[1]]$inbound_layers,
-                                         function(lay) lay$output)
+# plot(pred_neat ~ log(test$prevalence+1))
+
+prelast <- length(neat_mod$layers)-1
+
+get_partial_effects <- function(){
+  
+  size_uni <- 16L
+  size_bi <- 25L
+  sizes <- c(1L, size_uni, size_uni, size_bi, size_uni, size_uni)
+  
+  bases <- tf$split(neat_mod$layers[[prelast]]$inbound_nodes[[1]]$inbound_layers$output,
+                    sizes, axis = 1L)
+  ws <- tf$split(neat_mod$layers[[prelast]]$weights[[1]], 
+                 sizes, axis = 0L)
+  
+  layer_concatenate(lapply(1:6, function(i) tf$matmul(bases[[i]], ws[[i]])))
+  
+}
+
+feature_eff_nets_neat <- keras_model(inputs = neat_mod$inputs,
+                                outputs = get_partial_effects()
                                 )
-)
+
 neatnam_effects <- feature_eff_nets_neat %>% predict(
-  deepregression:::prepare_newdata(
-    neat$init_params$parsed_formulas_contents, df, 
-    gamdata = neat$init_params$gamdata$data_trafos
-  )
+  list(cbind(1,as.matrix(df[,c("date", "population",
+                       "latitude", "longitude",
+                       "temp", "humid")])),
+       matrix(df$prevalence))
 )
-colnames(neatnam_effects) <- trimws(strsplit(as.character(form_nam)[[2]], "+", fixed=TRUE)[[1]][c(2:6,1)])
+colnames(neatnam_effects) <- trimws(strsplit(as.character(form_nam)[[2]], "+", fixed=TRUE)[[1]][c(1:6)])
 saveRDS(neatnam_effects, file = "plotdata_neat.RDS")
 
-rm(neatnam_effects); gc(); gc()
-rm(neat); gc(); gc()
+state_df <- map_data("state")
+county_df <- map_data("county")
 
-c(metr_str, metr_nam, metr_sls, metr_neat)
+prplot <- county_df %>% select(lat, long) %>%
+  rename(latitude = lat, longitude = long)
+
+spatial_effect <- feature_eff_nets_neat %>% predict(
+  list(as.matrix(cbind(1, 0, 0, prplot, 0, 0)), matrix(rep(0, nrow(prplot))))
+)
+
+saveRDS(spatial_effect, file = "plotspatial_neat.RDS")
+
+rm(neatnam_effects); gc(); gc()
+rm(neat_mod); gc(); gc()
+
+# compare metrics
+c(metr_str, metr_nam, metr_neat)

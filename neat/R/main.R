@@ -84,14 +84,14 @@ layer_nonneg_tanh <- function(...) layer_dense(..., activation = "tanh",
                                                  keras$constraints$non_neg(),
                                                kernel_initializer = 
                                                  keras$initializers$random_uniform(minval = 0, 
-                                                                                   maxval = 1))
+                                                                                   maxval = 0.01))
 
 layer_nonneg_lin <- function(...) layer_dense(..., activation = "linear", 
                                               kernel_constraint = 
                                                 keras$constraints$non_neg(),
                                               kernel_initializer = 
                                                 keras$initializers$random_uniform(minval = 0, 
-                                                                                  maxval = 1),
+                                                                                  maxval = 0.01),
                                               use_bias = FALSE
 )
 
@@ -100,7 +100,7 @@ layer_nonneg_lin_bias <- function(...) layer_dense(..., activation = "linear",
                                                      keras$constraints$non_neg(),
                                                    kernel_initializer = 
                                                      keras$initializers$random_uniform(minval = 0, 
-                                                                                       maxval = 1),
+                                                                                       maxval = 0.01),
                                                    use_bias = TRUE
 )
 
