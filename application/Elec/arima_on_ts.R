@@ -9,10 +9,10 @@ data_path <- file.path(ts_application, "electricity.RDS")
 
 no_cores <- parallel::detectCores() - 1
 metric <- "logscore"
-sub_index <- 2
+sub_index <- NULL
 plan(cluster, workers = no_cores)
 
-find_arima <- function(yy, pp = 24, qq = 3, trun = NULL) {
+find_arima <- function(yy, pp = 12, qq = 3, trun = NULL) {
   
   # yy: time series preferably ts() or xts()
   
@@ -40,7 +40,7 @@ find_arima <- function(yy, pp = 24, qq = 3, trun = NULL) {
   return(m)
 }
 
-make_ts <- function(yy, tt, fr = 12) {
+make_ts <- function(yy, tt, fr = 24) {
   
   # auto.arima() reacts differently to ts() class with frequency attribute
   # than to plain numeric() in terms of seasonality detection
@@ -207,4 +207,4 @@ attr(res_elec, "metric") <- metric
 attr(res_elec, "run_time") <- Sys.time() - strt
 attr(res_elec, "session_info") <- sessionInfo()
 
-saveRDS(res_elec, file = file.path(ts_application, "res_arima.RDS"))
+saveRDS(res_elec, file = file.path(ts_application, "res_arima_48.RDS"))

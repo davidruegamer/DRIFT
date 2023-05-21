@@ -1,4 +1,5 @@
 p <- file.path(getwd(), "application","Elec")
+tzz <- "UTC"
 source(file.path(p, "utils.R"))
 
 parser <- ArgumentParser()
@@ -10,6 +11,9 @@ prep_data <- function(first_date = "2014-07-01 00:00:00",
                       last_date = "2014-07-07 23:00:00",
                       l_ags = NULL){
   
+  first_date <- as.POSIXct(first_date, format = "%Y-%m-%d %H:%M:%S", tz = tzz)
+  last_date <- as.POSIXct(last_date, format = "%Y-%m-%d %H:%M:%S", tz = tzz)
+  
   ## "electricity": hourly electricity consumption (kwh) for 370 households
   
   d <- fread(file.path(p, "elec.csv"))
@@ -17,9 +21,10 @@ prep_data <- function(first_date = "2014-07-01 00:00:00",
   
   # create features and prepare for cluster
   d_sets <- equip_d(create_lags(d, lags = 1:as.numeric(l_ags)))
+  d_sets[, t_ime := as.POSIXct(t_ime, format = "%Y-%m-%d %H:%M:%S", tz = tzz)]
 
   # get train test split
-  next_day <- as.POSIXct(last_date, format = "%Y-%m-%d %H:%M:%S") + 24*60*60
+  next_day <- last_date+ 24*60*60
   nextnext_day <- next_day + 24*60*60
   
   d_val_tr <- d_sets %>% filter(t_ime >= first_date & t_ime <= last_date)

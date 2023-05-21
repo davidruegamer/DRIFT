@@ -94,6 +94,7 @@ def fit_func(params, data_path, experiment_id, args, fast):
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
 
+    mlflow.autolog()
     mlflow.start_run(experiment_id=experiment_id)
 
     log_fit_params(args, params)
@@ -133,7 +134,7 @@ def get_hp_space() -> list[dict]:
     dropout = [0, 0.1]
     x_unit = [20, 50, 100]
     x_layer = [1, 2]
-    y_base_unit = [20, 50, 100]
+    y_base_unit = [5, 10, 20, 50, 100]
     y_top_unit = [5, 10, 20]
     learning_rates = [1e-2, 1e-3, 1e-4]
     model = [ModelType.LS, ModelType.INTER]

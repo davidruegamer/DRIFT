@@ -1,0 +1,7 @@
+To reproduce the results of Section 5.2.5 (electricity consumption forecasting)
+you can obtain the mentioned train, validation and test set from running the 
+`prep_data_elec.R` file which takes the raw data (`elec.csv`) as input. This
+produces the `electricity.RDS` file which serves as the input for `neat_on_ts.R`
+and `arima_on_ts.R` which, in turn, produce the log-scores reported for the
+DRIFT model and the ARIMA model respectively. The `utils.R` file holds corresponding
+helper functions for both DRIFT and ARIMA.
