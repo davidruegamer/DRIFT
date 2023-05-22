@@ -4,7 +4,7 @@ rm(list = ls())
 
 pacman::p_load(furrr, scoringRules, xts, purrr, forecast, data.table)
 
-ts_application <- file.path(getwd(), "application","ts_example")
+ts_application <- file.path(getwd(), "application","Elec")
 data_path <- file.path(ts_application, "electricity.RDS")
 
 no_cores <- parallel::detectCores() - 1

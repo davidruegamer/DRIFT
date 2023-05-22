@@ -1,10 +1,19 @@
 library(dplyr)
 library(deepregression)
-devtools::load_all("~/NSL/deeptrafo/")
+library(deeptrafo)
+devtools::load_all("~/NSL/deepoptim/")
+optimizer_alig <- function(maxlr=NULL, mom=0.0, stab=1e-5) {
+  python_path <- system.file("python", package = "deepoptim")
+  opt <- reticulate::import_from_path("optimizers", path = python_path)
+  return(opt$AliG(max_lr=maxlr, momentum=mom, eps=stab))
+}
+
+set.seed(32)
 
 # Choose size
-size <- "small"
-# size <- "large"
+# size <- "small"
+size <- "large"
+save_model <- TRUE
 
 # Read data
 df <- read.csv("data/analysis_subset.csv")
@@ -14,7 +23,7 @@ df <- df %>%
     humid = relative_humidity
   ) %>% 
   mutate(
-    cases = new_confirmed * 1.0
+    cases = log(new_confirmed * 1.0 + 1)
   ) %>% 
   filter(
     cases >=0
@@ -32,8 +41,9 @@ if(size == "small")
   
 }else{
   
-  bs <- 1024L
-  eps <- 150L
+  df <- df[sample(1:nrow(df), 1e6),]
+  bs <- 128L
+  eps <- 250L
 
 }
 ps <- 15L
@@ -80,19 +90,13 @@ feature_net_bi <- function(x){
 }
 
 # Define model formulas
-form_structured <- ~ 
-  1 + s(date) + s(population) + te(latitude, longitude) + 
+form_structured <- ~ 1 + s(date) + s(population) + te(latitude, longitude) + 
   s(temp) + s(humid) 
-form_nam <- ~ 
-  1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
+form_nam <- ~ 1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
   snam(temp) + snam(humid) 
-form_sls <- cases | s(date) + s(population) + te(latitude, longitude) + 
-  s(temp) + s(humid)  ~ 
-  1 + s(date) + s(population) + te(latitude, longitude) + 
+form_sls <- cases ~ 1 + s(date) + s(population) + te(latitude, longitude) + 
   s(temp) + s(humid) 
-form_neat <- cases | snam(date) + snam(population) + tenam(latitude, longitude) + 
-  snam(temp) + snam(humid) ~ 
-  1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
+form_neat <- cases  ~ 1 + snam(date) + snam(population) + tenam(latitude, longitude) + 
   snam(temp) + snam(humid) 
 
 # Init and fit models
@@ -114,19 +118,31 @@ if(file.exists("weights_str.hdf5")){
   hist_str <- mod_str %>% fit(epochs = eps, early_stopping = TRUE, 
                           patience = ps, batch_size = bs)
   
-  save_model_weights_hdf5(mod_str$model, filepath="weights_str.hdf5")
+  if(save_model)
+    save_model_weights_hdf5(mod_str$model, filepath="weights_str.hdf5")
   
 }
 
+# 584.7298
+(metr_str <- Metrics::rmse(test$cases, mod_str %>% predict(test)))
 
-Metrics::rmse(test$cases, mod_str %>% predict(test))
-# 567.0064
+plotdata_str <- plot(mod_str, only_data = TRUE)
+saveRDS(plotdata_str, file = "plotdata_str.RDS")
+
+rm(plotdata_str); gc(); gc()
+rm(mod_str); gc(); gc()
+
+### with NAM effects
 
 mod_nam <- deepregression(
-  y = cases,
-  list_of_formulas = list(form_ssn_mean),
+  y = df$cases,
+  list_of_formulas = list(form_nam, ~1),
   data = df,
-  list_of_deep_models = NULL,
+  list_of_deep_models = 
+    list(
+      snam = feature_net,
+      tenam = feature_net_bi
+    ),
   orthog_options = orthog_control(orthogonalize = FALSE)
 )
 
@@ -139,19 +155,40 @@ if(file.exists("weights_nam.hdf5")){
   hist_unc <- mod_nam %>% fit(epochs = eps, early_stopping = TRUE, 
                                     patience = ps, batch_size = bs)
   
-  save_model_weights_hdf5(mod_nam$model, filepath="weights_nam.hdf5")
+  if(save_model)
+    save_model_weights_hdf5(mod_nam$model, filepath="weights_nam.hdf5")
   
 }
 
-Metrics::rmse(test$new_confirmed, mod_nam %>% predict(test))
-# 0.7142373
+(metr_nam <- Metrics::rmse(test$cases, mod_nam %>% predict(test)))
+# 589.0838
+
+feature_eff_nets <- keras_model(inputs = mod_nam$model$inputs,
+                                outputs = layer_concatenate(
+                                  lapply(mod_nam$model$layers[[37]]$inbound_nodes[[1]]$inbound_layers,
+                                         function(lay) lay$output)
+                                )
+)
+nam_effects <- feature_eff_nets %>% predict(
+  deepregression:::prepare_newdata(
+    mod_nam$init_params$parsed_formulas_contents, df, 
+    gamdata = mod_nam$init_params$gamdata$data_trafos
+  )
+)
+colnames(nam_effects) <- trimws(strsplit(as.character(form_nam)[[2]], "+", fixed=TRUE)[[1]][c(2:6,1)])
+saveRDS(nam_effects, file = "plotdata_nam.RDS")
+
+rm(nam_effects); gc(); gc()
+rm(mod_nam); gc(); gc()
+
+### without dist assumption
 
 mod_sls <- deeptrafo(form_sls, 
                      response_type = "count",
-                     interact_type = "ls",
                      data = df,
                      list_of_deep_models = NULL,
-                     orthog_options = orthog_control(orthogonalize = FALSE)
+                     orthog_options = orthog_control(orthogonalize = FALSE),
+                     optimizer = optimizer_alig(0.5, mom = 0.9)
 )
 
 if(file.exists("weights_sls.hdf5")){
@@ -161,344 +198,77 @@ if(file.exists("weights_sls.hdf5")){
 }else{
   
   hist_sls <- mod_sls %>% fit(epochs = eps, early_stopping = TRUE, 
-                              patience = ps, batch_size = bs)
+                              patience = ps, batch_size = bs*3#, 
+                              # callbacks = callback_learning_rate_scheduler(
+                              #   tf$keras$experimental$CosineDecayRestarts(.5, 5, t_mul = 2, m_mul = .8))
+                              )
   
-  save_model_weights_hdf5(mod_sls$model, filepath="weights_sls.hdf5")
+  if(save_model)
+    save_model_weights_hdf5(mod_sls$model, filepath="weights_sls.hdf5")
   
 }
 
-Metrics::rmse(test$new_confirmed, mod_sls %>% predict(test))
-# 0.6670314
+(metr_sls <- Metrics::rmse(test$cases, mod_sls %>% predict(test)))
+# 548.6764
 
+plotdata_sls <- plot(mod_sls, only_data = TRUE)
+saveRDS(plotdata_sls, file = "plotdata_sls.RDS")
+
+rm(plotdata_sls); gc(); gc()
+rm(mod_sls); gc(); gc()
+
+### with NAM effects
 
 neat <- deeptrafo(form_neat, 
-                  response_type = "count",
-                  data = df,
-                  list_of_deep_models = list(
-                    dnn = deep_mod_nam,
-                    snam = feature_net,
-                    tenam = feature_net_bi
-                  ),
-                  orthog_options = orthog_control(orthogonalize = FALSE)
+                      response_type = "count",
+                      data = df,
+                      list_of_deep_models = list(
+                        dnn = deep_mod_nam,
+                        snam = feature_net,
+                        tenam = feature_net_bi
+                      ),
+                      orthog_options = orthog_control(orthogonalize = FALSE)
 )
 
-if(file.exists("weights_nam.hdf5")){
+if(file.exists("weights_neat.hdf5")){
   
-  neat$model$load_weights(filepath="weights_nam.hdf5", by_name = FALSE)
+  neat$model$load_weights(filepath="weights_neat.hdf5", by_name = FALSE)
   
 }else{
   
   hist_nam <- neat %>% fit(epochs = eps, early_stopping = TRUE, 
                           patience = ps, batch_size = bs)
   
-  save_model_weights_hdf5(neat$model, filepath="weights_nam.hdf5")
+  if(save_model)
+    save_model_weights_hdf5(neat$model, filepath="weights_neat.hdf5")
    
 }
 
-Metrics::rmse(test$new_confirmed, neat %>% predict(test))
-# 0.6670314
+(metr_neat <- Metrics::rmse(test$cases, neat %>% predict(test)))
+# 548.5575
 
-# Extract effects
+# plot_y <- seq(min(df$cases), max(df$cases), l=1000)
+# trafo_fun <- neat %>% predict(newdata = cbind(df[1:1000,-which(names(df)=="cases")], cases=plot_y), 
+#                               type = "trafo")
+# plot(trafo_fun ~ plot_y, type = "l")
+# abline(0, 1, lty=2, col="red")
 
-## ONO
-
-smt <- c("s(date)", "s(population)", 
-         "te(latitude, longitude)",
-         "s(temp)", "s(humid)")
-
-pes_ono <- lapply(smt, function(name) 
-                    ono %>% get_partial_effect(names = name))
-names(pes_ono) <- smt
-saveRDS(pes_ono, file = "ONO_PEs.RDS")
-
-## UNC
-
-pes_unc <- lapply(smt, function(name) 
-  unconstrained %>% get_partial_effect(names = name))
-names(pes_unc) <- smt
-saveRDS(pes_unc, file = "UNC_PEs.RDS")
-
-DNN_lastlayer <- 
-  unconstrained$model$layers[[length(unconstrained$model$layers)-3
-                              ]]$inbound_nodes[[1]]$inbound_layers[[6]]
-
-interm_mod <- keras_model(unconstrained$model$inputs,
-                          DNN_lastlayer$output)
-
-proc_unc <- deepregression:::prepare_newdata(
-  unconstrained$init_params$parsed_formulas_contents, df, 
-  gamdata = unconstrained$init_params$gamdata$data_trafos
+feature_eff_nets_neat <- keras_model(inputs = neat$model$inputs,
+                                outputs = layer_concatenate(
+                                  lapply(neat$model$layers[[51]]$inbound_nodes[[1]]$inbound_layers,
+                                         function(lay) lay$output)
+                                )
 )
-
-deep_output <- interm_mod$predict(proc_unc, batch_size = 200L)
-saveRDS(deep_output, file = "UNC_unstructured.RDS")
-
-Xmat <- do.call("cbind", proc_unc[c(1:5,7)])
-rm(proc_unc); gc()
-
-## PHO(GAM)
-
-pho_lm <- lm(deep_output ~ -1 + Xmat)
-coef_pho <- unlist(coef(unconstrained)) + coef(pho_lm)
-saveRDS(coef_pho, file = "coef_pho.RDS")
-pes_pho <- cbind(Xmat[,1:9]%*%coef_pho[1:9],
-                 Xmat[,10:18]%*%coef_pho[10:18],
-                 Xmat[,19:43]%*%coef_pho[19:43],
-                 Xmat[,44:52]%*%coef_pho[44:52],
-                 Xmat[,53:61]%*%coef_pho[53:61])
-pes_pho <- as.data.frame(pes_pho)
-colnames(pes_pho) <- names(pes_unc)
-saveRDS(pes_pho, file = "PHO_PEs.RDS")
-
-pho_gam <- mgcv::bam(do ~ s(date) + s(population) + te(latitude, longitude) + s(temp) + s(humid),
-                    data = cbind(do = deep_output, df))
-gam_terms <- predict(pho_gam, type="terms")
-saveRDS(gam_terms, file = "terms_phogam.RDS")
-
-pes_phogam <- do.call("cbind", pes_unc) + gam_terms
-pes_phogam <- as.data.frame(pes_phogam)
-colnames(pes_phogam) <- names(pes_unc)
-saveRDS(pes_phogam, file = "PHOGAM_PEs.RDS")
-
-## NAM
-
-proc_df <- deepregression:::prepare_newdata(
-  nam$init_params$parsed_formulas_contents, df, 
-  gamdata = nam$init_params$gamdata$data_trafos
+neatnam_effects <- feature_eff_nets_neat %>% predict(
+  deepregression:::prepare_newdata(
+    neat$init_params$parsed_formulas_contents, df, 
+    gamdata = neat$init_params$gamdata$data_trafos
+  )
 )
+colnames(neatnam_effects) <- trimws(strsplit(as.character(form_nam)[[2]], "+", fixed=TRUE)[[1]][c(2:6,1)])
+saveRDS(neatnam_effects, file = "plotdata_neat.RDS")
 
-lastlayer <- nam$model$layers[[length(nam$model$layers)-3]]$inbound_nodes[[1]]$inbound_layers
-ll_weights <- lapply(1:length(lastlayer), function(lid) lastlayer[[lid]]$get_weights())
-ll_inputs <- lapply(1:length(lastlayer), function(lid){
-  
-  temp_mod <- keras_model(nam$model$inputs, outputs = lastlayer[[lid]]$input)
-  return(temp_mod$predict(proc_df, batch_size = 500L))
-  
-})
+rm(neatnam_effects); gc(); gc()
+rm(neat); gc(); gc()
 
-saveRDS(list(ll_weights, ll_inputs), file = "NAM_lastlayer_info.RDS")
-
-pes_nam <- sapply(1:5, function(i) ll_inputs[[i]]%*%ll_weights[[i]][[1]])
-colnames(pes_nam) <- c("s(date)", "s(population)", "te(latitude, longitude)", "s(temp)", "s(humid)")
-saveRDS(pes_nam, file = "NAM_PEs.RDS")
-
-deep_nam <- ll_inputs[[6]]%*%ll_weights[[6]][[1]] + c(ll_weights[[6]][[2]])
-saveRDS(deep_nam, file = "NAM_unstructured.RDS")
-
-Xmat_nam <- do.call("cbind", ll_inputs[1:5])
-saveRDS(Xmat_nam, file = "NAM_Xmat.RDS")
-coef_nam <- sapply(1:5, function(i) ll_weights[[i]][[1]])
-saveRDS(coef_nam, file = "NAM_coef.RDS")
-rm(ll_weights, ll_inputs); gc()
-rm(nam, pes_nam); gc()
-
-## PHONAM
-phonam <- mgcv::bam(deep_nam ~ s(date) + s(population) + te(latitude, longitude) + s(temp) + s(humid),
-                    data = cbind(deep_nam = deep_nam, df))
-# coef_phonam <- unlist(coef_nam) + coef(phonam)
-# saveRDS(coef_phonam, file = "coef_phonam.RDS")
-# pes_phonam <- cbind(Xmat_nam[,1:9]%*%coef_phonam[1:9],
-#                  Xmat_nam[,10:18]%*%coef_phonam[10:18],
-#                  Xmat_nam[,19:43]%*%coef_phonam[19:43],
-#                  Xmat_nam[,44:52]%*%coef_phonam[44:52],
-#                  Xmat_nam[,53:61]%*%coef_phonam[53:61])
-
-if(c(var(deep_nam))==0){
-  pes_phonam <- pes_nam
-}else{
-  gamnam_terms <- predict(phonam, type="terms")
-  saveRDS(gamnam_terms, file = "terms_phonam.RDS")
-  
-  pes_phonam <- pes_nam + gamnam_terms
-  colnames(pes_phonam) <- c("s(date)", "s(population)", "te(latitude, longitude)", "s(temp)", "s(humid)")
-}
-saveRDS(pes_phonam, file = "PHONAM_PEs.RDS")
-
-# Create plotting data
-
-pes_nam <- readRDS("NAM_PEs.RDS")
-pes_phonam <- readRDS("PHONAM_PEs.RDS")
-pes_ono <- readRDS("ONO_PEs.RDS")
-pes_unc <- readRDS("UNC_PEs.RDS")
-pes_pho <- readRDS("PHO_PEs.RDS")
-pes_phogam <- readRDS("PHOGAM_PEs.RDS")
-
-set.seed(42)
-subsample_idx <- sample(1:nrow(df), size = 100000)
-
-plotdata_nam <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_nam,
-  method = "NAM"
-)[subsample_idx,]
-
-plotdata_phonam <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_phonam,
-  method = "PHONAM"
-)[subsample_idx,]
-
-plotdata_ono <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_ono,
-  method = "ONO"
-)[subsample_idx,]
-
-plotdata_unc <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_unc,
-  method = "UNCONS"
-)[subsample_idx,]
-
-plotdata_pho <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_pho,
-  method = "PHO"
-)[subsample_idx,]
-
-plotdata_phogam <- cbind(
-  (df %>% select(date, population, latitude, longitude, temp, humid)),
-  pes_phogam,
-  method = "PHOGAM"
-)[subsample_idx,]
-
-
-plotdata <- rbind(plotdata_nam, plotdata_phonam,
-                  plotdata_ono, plotdata_unc,
-                  plotdata_pho, plotdata_phogam)
-
-saveRDS(plotdata, file = "plotdata.RDS")
-rm(plotdata_nam, plotdata_phonam, 
-   plotdata_ono, plotdata_unc,
-   plotdata_pho, plotdata_phogam); gc()
-
-# Create plot
-library(ggplot2)
-library(ggmap)
-library(mapproj)
-library(viridis)
-
-plotdata <- readRDS("plotdata.RDS")
-
-plotdata_uni <- do.call("rbind", 
-                        list(
-                          plotdata %>% select(date, `s(date)`, method) %>% rename(pe = `s(date)`,
-                                                                          x = date) %>% mutate(var = "date"), 
-                          plotdata %>% select(population, `s(population)`, method) %>% rename(pe = `s(population)`,
-                                                                                      x = population) %>% mutate(var = "population"),
-                          plotdata %>% select(temp, `s(temp)`, method) %>% rename(pe = `s(temp)`,
-                                                                          x = temp) %>% mutate(var = "temp"),
-                          plotdata %>% select(humid, `s(humid)`, method) %>% rename(pe = `s(humid)`,
-                                                                            x = humid) %>% mutate(var = "humid")
-                        ))
-
-plotdata_uni$var[plotdata_uni$var=="humid"] <- "humidity"
-plotdata_uni$var[plotdata_uni$var=="temp"] <- "temperature"
-plotdata_uni$var[plotdata_uni$var=="date"] <- "days since start"
-
-ggplot(plotdata_uni %>% filter(method != "UNCONS") %>% 
-         group_by(method, var) %>% 
-         mutate(pe = pe - mean(pe)) %>% 
-         ungroup, 
-       aes(x = x, y = pe, colour = method)) + 
-  geom_line(size=1.2) + facet_wrap(~var, scale="free", ncol = 2) + 
-  theme_bw() + xlab("Value") + 
-  ylab("Partial Effect") + theme(text = element_text(size = 14),
-                                 legend.title = element_blank()) + 
-  scale_colour_manual(values = c("#009E73", "#E69F00", "#999999", "#CC79A7", "#56B4E9")) + 
-  theme(legend.position="bottom")
-
-ggsave(filename = "uni_effect.pdf", width = 6, height = 5)
-
-
-# spatial
-myLocation<-c(-130,  
-              23, 
-              -60, 
-              50)
-myMap <- get_map(location = myLocation, 
-                 source="google", 
-                 maptype="terrain", 
-                 color = "bw",
-                 crop=TRUE)
-
-# state_df <- map_data("state", projection = "albers", parameters = c(39, 45))
-state_df <- map_data("state")
-county_df <- map_data("county")
-
-ggplot(county_df, aes(long, lat, group = group)) +
-  geom_polygon(colour = alpha("black", 1 / 2), size = 0.2) + 
-  geom_polygon(data = state_df, colour = "black", fill = NA) +
-  theme_minimal() + 
-  theme(axis.line = element_blank(), axis.text = element_blank(),
-        axis.ticks = element_blank(), axis.title = element_blank())
-
-pd <- plotdata %>% 
-  # filter(method != "UNCONS") %>% 
-  filter(longitude >= -130 & longitude <= -60 & 
-           latitude >= 23 & latitude <= 50) %>% 
-  group_by(method) %>% 
-  mutate(`te(latitude, longitude)` = `te(latitude, longitude)` - mean(`te(latitude, longitude)`)) %>% 
-  ungroup 
-
-ggmap(myMap) + # xlab("Longitude") + ylab("Latitude") + 
-  geom_point(data = pd %>% filter(!method %in% c("UNCONS", "PHO")) %>% 
-               mutate(method = factor(method, levels = c("ONO", "PHOGAM", "NAM", "PHONAM"))), 
-             aes(x = longitude, y = latitude, 
-                 colour = `te(latitude, longitude)`), alpha = 0.025, size = 8) + 
-  geom_polygon(data = state_df %>% arrange(-order),
-               mapping = aes(x = long, y = lat, group = group),
-               colour = "white", fill = NA, size = 0.2, alpha = 0.5) +
-  geom_polygon(data = county_df %>% arrange(order),
-               # aes(fill = `te(latitude, longitude)`),
-               mapping = aes(x = long, y = lat, group = group),
-               colour = alpha("white", 1 / 2), size = 0.06, alpha=0.005) +
-  scale_colour_viridis_c(option = 'magma', direction = -1, 
-                         name = "") + 
-  guides(alpha = "none", size = "none") + # ggtitle("Geographic Location Effect") +
-  theme(plot.title = element_text(hjust = 0.5),
-        text = element_text(size=14),
-        axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),
-        axis.title.y=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks.y=element_blank(),
-        legend.position = "bottom",
-        legend.key.width=unit(1.2,"cm")
-        ) + 
-  facet_wrap(~ method, ncol = 2) 
-
-ggsave(file = "spatial.jpeg", device = "jpeg"#,
-       #width = 7, height = 5.5
-       )
-
-library(mgcv)
-tetr <- smoothCon(te(latitude, longitude), data = df %>% select(latitude, longitude))[[1]]
-Xp <- PredictMat(tetr, county_df %>% select(lat, long) %>% 
-                   rename(latitude = lat, longitude = long))
-coef_pho <- readRDS("coef_pho.RDS")
-effect <- Xp%*%coef_pho[grepl("latitude", names(coef_pho))]
-county_df$eff <- effect[,1] - mean(effect[,1])
-
-state_df_proj <- map_data("state", projection = "albers", parameters = c(39, 45))
-state_df <- state_df %>% left_join(state_df_proj, by = c("group", "order"))
-county_df_proj <- map_data("county", projection = "albers", parameters = c(39, 45))
-county_df <- county_df %>% left_join(county_df_proj, by = c("group", "order"))
-
-ggplot(county_df, aes(long.y, lat.y, group = group)) + 
-  geom_polygon(aes(fill = eff), colour = alpha("white", 0.1), size = 0.12) +
-  geom_polygon(data = state_df, colour = "white", fill = NA) +
-  coord_fixed() +
-  theme_minimal() +
-  theme(axis.line = element_blank(), axis.text = element_blank(),
-        axis.ticks = element_blank(), axis.title = element_blank()) +
-  scale_fill_viridis_c(option = 'magma', direction = -1, 
-                         name = "") + 
-  theme(legend.position = "bottom",
-        legend.key.width=unit(1.6,"cm"),
-        text = element_text(size = 16))
-
-ggsave(file = "spatial_phogam.pdf"#, device = "jpeg"#,
-       #width = 7, height = 5.5
-)
+c(metr_str, metr_nam, metr_sls, metr_neat)

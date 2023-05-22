@@ -39,7 +39,7 @@ neat_model <- new_model_class(
       # print(h_prime)
       loss_value = self$loss_fn_unnorm(x[[2]], h)
       # print(loss_value)
-      logLik = tf$reduce_sum(tf$subtract(
+      logLik = tf$reduce_mean(tf$subtract(
         loss_value, 
         tf$math$log(tf$clip_by_value(h_prime, 1e-8, Inf))))
       # print(logLik)
@@ -82,7 +82,7 @@ neat_model <- new_model_class(
       h_prime = tape$gradient(h, x[[2]])
 
       loss_value = self$loss_fn_unnorm(x[[2]], h)
-      logLik = tf$reduce_sum(tf$subtract(
+      logLik = tf$reduce_mean(tf$subtract(
         loss_value, 
         tf$math$log(tf$clip_by_value(h_prime, 1e-8, Inf))))
 
