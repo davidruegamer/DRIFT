@@ -145,7 +145,7 @@ dr <- function(formla, trainX, trainY, testX, testY,
   
   family <- "normal"
     
-  if(length(unique(trainY))<=5) family = "multinomial"
+  # if(length(unique(trainY))<=5) family = "multinomial"
 
   args <- list(y = trainY, 
                list_of_formulas = list(as.formula(formla), 
@@ -221,7 +221,7 @@ tm <- function(formula, trainX, trainY, testX, testY,
 neat_generic <- function(trainX, trainY, testX, testY,
                          architecture, type,
                          addnam = TRUE,
-                         optimizer = optimizer_adam(),
+                         optimizer = optimizer_adam(learning_rate = 0.0001),
                          maxEpochs = 10000,
                          patience = 250, 
                          verbose = FALSE,
@@ -243,6 +243,7 @@ neat_generic <- function(trainX, trainY, testX, testY,
         
     mod <- neat(
       dim_features,
+      net_y_size_trunk = nonneg_tanh_network(c(10, 10)),
       net_x_arch_trunk = deep_mod,
       type = type,
       optimizer = optimizer
@@ -252,6 +253,7 @@ neat_generic <- function(trainX, trainY, testX, testY,
    
     mod <- sneat(
       dim_features,
+      net_y_size_trunk = nonneg_tanh_network(c(10, 10)),
       type = type,
       optimizer = optimizer
     ) 
@@ -277,7 +279,7 @@ neat_generic <- function(trainX, trainY, testX, testY,
   #                     )$logLik$numpy()
   ll <- - mod$evaluate(list(as.matrix(testX),
                             matrix(testY)),
-                       matrix(testY))/nrow(testX)
+                       matrix(testY))
   
   rm(mod); gc()
   
@@ -334,8 +336,9 @@ ssdr <- function(trainX, trainY, testX, testY,
   form <- form_generator(colnames(trainX), nam = FALSE, add_deep = TRUE)
   
   res <- dr(form, deep_mod_list = list(deep_mod = deep_mod),
-             trainX, trainY, testX, testY, 
-             oz_option = orthog_control(orthogonalize = FALSE),
+            trainX, trainY, testX, testY, 
+            oz_option = orthog_control(orthogonalize = FALSE),
+            optimizer = optimizer_adam(learning_rate = 0.01),
              ...)
   
   return(res)

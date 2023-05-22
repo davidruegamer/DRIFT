@@ -89,6 +89,7 @@ def log_fit_params(args, params):
 
 
 def fit_func(params, data_path, experiment_id, args, fast):
+
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
