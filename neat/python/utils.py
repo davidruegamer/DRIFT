@@ -1,11 +1,13 @@
 from enum import Enum
 from typing import Iterable, Sequence
+import numpy as np
 
 import tensorflow as tf
 from keras import constraints, initializers
 from keras.callbacks import EarlyStopping
 from keras.layers import Concatenate, Dense, Input, Dropout
 from keras.optimizers import Adam, Optimizer
+from keras import regularizers
 from tensorflow_probability import distributions as tfd
 
 from monolayers import MonoMultiLayer, mono_trafo_multi
@@ -20,14 +22,14 @@ class ModelType(Enum):
 
 
 def mlp_with_default_layer(
-    size: Sequence[int], default_layer: callable, dropout: float
+        size: Sequence[int], default_layer: callable, dropout: float, **layer_kwargs
 ) -> callable:
     def inner(inp):
-        x = default_layer(units=size[0])(inp)
+        x = default_layer(units=size[0], **layer_kwargs)(inp)
         for i in range(1, len(size)):
             if dropout > 0:
                 x = Dropout(dropout)(x)
-            x = default_layer(units=size[i])(x)
+            x = default_layer(units=size[i], **layer_kwargs)(x)
         return x
 
     return inner
@@ -42,9 +44,9 @@ def relu_network(size: Iterable[int], dropout: float) -> callable:
 
 
 def feature_specific_network(
-    size: Iterable[int],
-    default_layer: callable,
-    dropout: float,
+        size: Iterable[int],
+        default_layer: callable,
+        dropout: float,
 ) -> callable:
     def inner(x):
         return Concatenate(axis=1)(
@@ -57,29 +59,45 @@ def feature_specific_network(
     return inner
 
 
+def constraint_xavier_init(shape, dtype=None):
+    fan_in = shape[0]
+    fan_out = shape[1]
+    limit = np.sqrt(6. / (fan_in + fan_out))
+    return tf.random.uniform(shape, minval=0., maxval=limit, dtype=dtype)
+
+def constraint_xavier_p_init(shape, dtype=None):
+    fan_in = shape[0]
+    fan_out = shape[1]
+    # limit = np.sqrt(6. / (fan_in+fan_out))
+    limit = np.sqrt(9. / (np.max([fan_in, fan_out])**2))
+    return tf.random.uniform(shape, minval=0, maxval=limit, dtype=dtype)
+
+
 def layer_nonneg_tanh(units: int, **kwargs) -> callable:
+    kernel_initializer = kwargs.pop('kernel_initializer', constraint_xavier_p_init)
     return Dense(
         activation="tanh",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=initializers.RandomUniform(minval=0, maxval=1),
+        kernel_initializer=kernel_initializer,
         units=units,
         **kwargs,
     )
 
 
 def layer_nonneg_lin(units: int, **kwargs) -> callable:
+    kernel_initializer = kwargs.pop('kernel_initializer', constraint_xavier_p_init)
     return Dense(
         activation="linear",
         kernel_constraint=constraints.non_neg(),
-        kernel_initializer=initializers.RandomUniform(minval=0, maxval=1),
+        kernel_initializer=kernel_initializer,
         units=units,
         **kwargs,
     )
 
 
-def nonneg_tanh_network(size: int, dropout: float) -> callable:
+def nonneg_tanh_network(size: int, dropout: float, **layer_kwargs) -> callable:
     return mlp_with_default_layer(
-        size, default_layer=layer_nonneg_tanh, dropout=dropout
+        size, default_layer=layer_nonneg_tanh, dropout=dropout, **layer_kwargs
     )
 
 
@@ -98,10 +116,10 @@ def tensorproduct_network(inpY, inpX, output_dim):
 
 
 def interconnected_network(
-    inpY: Input,
-    inpX: Input,
-    network_default: callable,
-    top_layer: callable,
+        inpY: Input,
+        inpX: Input,
+        network_default: callable,
+        top_layer: callable,
 ) -> callable:
     x = Concatenate()([inpX, inpY])
     x = network_default(x)
@@ -117,11 +135,11 @@ def layer_inverse_exp(units: int, **kwargs) -> callable:
 
 
 def locscale_network(
-    inpY: Input,
-    inpX: Input,
-    mu_top_layer: callable,
-    sd_top_layer: callable,
-    top_layer: callable,
+        inpY: Input,
+        inpX: Input,
+        mu_top_layer: callable,
+        sd_top_layer: callable,
+        top_layer: callable,
 ) -> callable:
     loc = mu_top_layer(inpX)
     scale_inv = sd_top_layer(inpX)
@@ -131,13 +149,13 @@ def locscale_network(
 
 
 def get_neat_model(
-    dim_features: int,
-    net_y_size_trunk: callable,
-    net_x_arch_trunk: callable,
-    model_type: ModelType,
-    base_distribution: tfd.Distribution,
-    optimizer: Optimizer,
-    **kwds,
+        dim_features: int,
+        net_y_size_trunk: callable,
+        net_x_arch_trunk: callable,
+        model_type: ModelType,
+        base_distribution: tfd.Distribution,
+        optimizer: Optimizer,
+        **kwds,
 ):
     # inputs
     inpX = Input(shape=(dim_features,))
@@ -169,7 +187,6 @@ def get_neat_model(
 
 
 def fit(epochs, train_data, val_data, **params):
-
     neat_model = get_neat_model(dim_features=train_data[0].shape[1], **params)
 
     callback = EarlyStopping(
