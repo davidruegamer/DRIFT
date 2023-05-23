@@ -65,8 +65,8 @@ def run_tp(X, y):
 def run_inter(X, y):
     mod = get_neat_model(
         dim_features=X.shape[1],
-        net_x_arch_trunk=relu_network((100, 100), dropout=0),
-        net_y_size_trunk=nonneg_tanh_network([50, 50, 10], dropout=0),
+        net_x_arch_trunk=relu_network((20, 20), dropout=0),
+        net_y_size_trunk=nonneg_tanh_network([20, 20, 10], dropout=0),
         base_distribution=tfd.Normal(loc=0, scale=1),
         optimizer=Adam(),
         # kwds:

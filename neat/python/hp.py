@@ -59,18 +59,18 @@ def run_single(
     mlflow.autolog()
     experiment_id = mlflow.set_experiment(f"{data_path}_runs")
 
-
     frame = inspect.currentframe()
     args, _, _, values = inspect.getargvalues(frame)
     arg_vals = {arg: values[arg] for arg in args}
 
     fit_args = [
-        (params, data_path, experiment_id.experiment_id, arg_vals, fast) for params in hp_space
+        (params, data_path, experiment_id.experiment_id, arg_vals, fast)
+        for params in hp_space
     ]
 
     # parallelize using dask instead of starmap
     b = db.from_sequence(fit_args, partition_size=1 if fast else 10)
-    b.starmap(fit_func).compute(scheduler='processes', num_workers=os.cpu_count())
+    b.starmap(fit_func).compute(scheduler="processes", num_workers=os.cpu_count())
 
 
 def log_fit_params(args, params):
@@ -89,7 +89,6 @@ def log_fit_params(args, params):
 
 
 def fit_func(params, data_path, experiment_id, args, fast):
-
     data = load_data(data_path)
     train_data = (data["x_train"], data["y_train"])
     val_data = (data["x_test"], data["y_test"])
@@ -140,28 +139,37 @@ def get_hp_space() -> list[dict]:
     model = [ModelType.LS, ModelType.INTER]
 
     args = []
-    for i, (s, d, x_u, x_l, y_b_u, y_t_u, lr, m) in enumerate(product(
-        seed, dropout, x_unit, x_layer, y_base_unit, y_top_unit, learning_rates, model
-    )):
-
-        args.append({
-            "seed": s,
-            "net_x_arch_trunk_args": {
-                "x_units": x_u,
-                "x_layers": x_l,
-                "dropout": d,
-            },
-            "net_y_size_trunk_args": {
-                "y_base_units": y_b_u,
-                "y_top_units": y_t_u,
-                "dropout": d,
-            },
-            "optimizer": Adam(learning_rate=lr),
-            "base_distribution": tfd.Normal(loc=0, scale=1),
-            "model_type": m,
-        })
+    for i, (s, d, x_u, x_l, y_b_u, y_t_u, lr, m) in enumerate(
+        product(
+            seed,
+            dropout,
+            x_unit,
+            x_layer,
+            y_base_unit,
+            y_top_unit,
+            learning_rates,
+            model,
+        )
+    ):
+        args.append(
+            {
+                "seed": s,
+                "net_x_arch_trunk_args": {
+                    "x_units": x_u,
+                    "x_layers": x_l,
+                    "dropout": d,
+                },
+                "net_y_size_trunk_args": {
+                    "y_base_units": y_b_u,
+                    "y_top_units": y_t_u,
+                    "dropout": d,
+                },
+                "optimizer": Adam(learning_rate=lr),
+                "base_distribution": tfd.Normal(loc=0, scale=1),
+                "model_type": m,
+            }
+        )
     return args
-
 
 
 def setup_logger(log_file: str, log_level: str) -> None:
