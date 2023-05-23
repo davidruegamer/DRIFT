@@ -64,16 +64,16 @@ benchmark_per_dataset <- function(name, folds = 10){
       data.frame(
         
         # deep distreg
-        # ddr_a = fun_w_ar(ddr, "a"),
-        # ddr_b = fun_w_ar(ddr, "b"),
-        # ddr_c = fun_w_ar(ddr, "c"),
-        # ddr_d = fun_w_ar(ddr, "d"),
+        ddr_a = fun_w_ar(ddr, "a"),
+        ddr_b = fun_w_ar(ddr, "b"),
+        ddr_c = fun_w_ar(ddr, "c"),
+        ddr_d = fun_w_ar(ddr, "d"),
 
         # deep neural trafos L-S model type        
-        # deepneatls_a = fun_w_ar(deepneatls, "a"),
-        # deepneatls_b = fun_w_ar(deepneatls, "b"),
-        # deepneatls_c = fun_w_ar(deepneatls, "c"),
-        # deepneatls_d = fun_w_ar(deepneatls, "d"),
+        deepneatls_a = fun_w_ar(deepneatls, "a"),
+        deepneatls_b = fun_w_ar(deepneatls, "b"),
+        deepneatls_c = fun_w_ar(deepneatls, "c"),
+        deepneatls_d = fun_w_ar(deepneatls, "d"),
         
         # deep neural trafos T-P model type
         # deepneattp_a = fun_w_ar(deepneattp, "a"),
@@ -88,52 +88,52 @@ benchmark_per_dataset <- function(name, folds = 10){
         # deepneatinter_d = fun_w_ar(deepneatinter, "d"),
 
         # structured additive distreg
-        # sadr = fun_w_ar(sadr, NULL),
+        sadr = fun_w_ar(sadr, NULL),
         
         # semi-structured additive distreg
         ssdr_a = fun_w_ar(ssdr, "a"),
         ssdr_b = fun_w_ar(ssdr, "b"),
         ssdr_c = fun_w_ar(ssdr, "c"),
-        ssdr_d = fun_w_ar(ssdr, "d")#,
+        ssdr_d = fun_w_ar(ssdr, "d"),
         
         # structured additive distreg with NAM effects
         # namdr = fun_w_ar(namdr, NULL),
         
         # semi-structured additive distreg with NAM effects
-        # snamdr_a = fun_w_ar(snamdr, "a"),
-        # snamdr_b = fun_w_ar(snamdr, "b"),
-        # snamdr_c = fun_w_ar(snamdr, "c"),
-        # snamdr_d = fun_w_ar(snamdr, "d"),
+        snamdr_a = fun_w_ar(snamdr, "a"),
+        snamdr_b = fun_w_ar(snamdr, "b"),
+        snamdr_c = fun_w_ar(snamdr, "c"),
+        snamdr_d = fun_w_ar(snamdr, "d"),
         
         # structured CTMs
-        # sctm = fun_w_ar(sctm, NULL),
+        sctm = fun_w_ar(sctm, NULL),
         
         # deep CTMs
-        # deepctm_a = fun_w_ar(deepctm, "a"),
-        # deepctm_b = fun_w_ar(deepctm, "b"),
-        # deepctm_c = fun_w_ar(deepctm, "c"),
-        # deepctm_d = fun_w_ar(deepctm, "d"),
+        deepctm_a = fun_w_ar(deepctm, "a"),
+        deepctm_b = fun_w_ar(deepctm, "b"),
+        deepctm_c = fun_w_ar(deepctm, "c"),
+        deepctm_d = fun_w_ar(deepctm, "d"),
         
         # structured trafos with NAM effects
-        # namtm = fun_w_ar(namtm, NULL),
+        namtm = fun_w_ar(namtm, NULL),
         # structured neural trafos L-S model type
-        # neatls = fun_w_ar(neatls, NULL),
+        neatls = fun_w_ar(neatls, NULL),
         # structured neural trafos T-P model type
         # neattp = fun_w_ar(neattp, NULL),
         # structured neural trafos interconnected model type
         # neatinter = fun_w_ar(neatinter, NULL),
 
         # semi-structured neural trafos L-S model type
-        # snamtam_a = fun_w_ar(snamtam, "a"),
-        # snamtam_b = fun_w_ar(snamtam, "b"),
-        # snamtam_c = fun_w_ar(snamtam, "c"),
-        # snamtam_d = fun_w_ar(snamtam, "d"),
+        snamtam_a = fun_w_ar(snamtam, "a"),
+        snamtam_b = fun_w_ar(snamtam, "b"),
+        snamtam_c = fun_w_ar(snamtam, "c"),
+        snamtam_d = fun_w_ar(snamtam, "d"),
         
         # semi-structured neural trafos L-S model type
-        # neatls_a = fun_w_ar(neatls, "a"),
-        # neatls_b = fun_w_ar(neatls, "b"),
-        # neatls_c = fun_w_ar(neatls, "c"),
-        # neatls_d = fun_w_ar(neatls, "d"),
+        neatls_a = fun_w_ar(neatls, "a"),
+        neatls_b = fun_w_ar(neatls, "b"),
+        neatls_c = fun_w_ar(neatls, "c"),
+        neatls_d = fun_w_ar(neatls, "d")
         
         # semi-structured neural trafos T-P model type
         # neattp_a = fun_w_ar(neattp, "a"),
