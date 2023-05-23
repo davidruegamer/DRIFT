@@ -18,40 +18,46 @@ n = 10000
 p = 1
 y = np.random.chisquare(df=4, size=n).reshape(-1, 1)
 X = np.random.normal(size=(n, p))
+model = ModelType.LS
 
 # NEAT
-# neat_model = get_neat_model(
-#     dim_features=p,
-#     net_x_arch_trunk=feature_specific_network(
-#         size=(64, 64, 32),
-#         default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
-#         dropout=0,
-#     ),
-#     net_y_size_trunk=nonneg_tanh_network([5, 5], dropout=0),
-#     base_distribution=tfd.Normal(loc=0, scale=1),
-#     optimizer=optimizers.Adam(learning_rate=0.0001),
-#     # kwds:
-#     model_type=ModelType.LS,
-#     mu_top_layer=Dense(units=1),
-#     sd_top_layer=layer_inverse_exp(units=1),
-#     top_layer=layer_nonneg_lin(units=1),
-# )
-# neat_model.summary()
+if model == ModelType.LS:
 
-neat_model = get_neat_model(
-    dim_features=p,
-    net_x_arch_trunk=feature_specific_network(
-        size=(64, 64, 32),
-        default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
-        dropout=0,
-    ),
-    net_y_size_trunk=nonneg_tanh_network([5, 5], dropout=0),
-    base_distribution=tfd.Normal(loc=0, scale=1),
-    optimizer=optimizers.Adam(learning_rate=0.0001),
-    # kwds:
-    model_type=ModelType.INTER,
-    top_layer=layer_nonneg_lin(units=1),
-)
+    neat_model = get_neat_model(
+        dim_features=p,
+        net_x_arch_trunk=feature_specific_network(
+            size=(64, 64, 32),
+            default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+            dropout=0,
+        ),
+        net_y_size_trunk=nonneg_tanh_network([5, 5], dropout=0),
+        base_distribution=tfd.Normal(loc=0, scale=1),
+        optimizer=optimizers.Adam(learning_rate=0.0001),
+        # kwds:
+        model_type=ModelType.LS,
+        mu_top_layer=Dense(units=1),
+        sd_top_layer=layer_inverse_exp(units=1),
+        top_layer=layer_nonneg_lin(units=1),
+    )
+
+elif model == ModelType.INTER:
+    neat_model = get_neat_model(
+        dim_features=p,
+        net_x_arch_trunk=feature_specific_network(
+            size=(64, 64, 32),
+            default_layer=lambda **kwargs: Dense(activation="relu", **kwargs),
+            dropout=0,
+        ),
+        net_y_size_trunk=nonneg_tanh_network([5, 5], dropout=0),
+        base_distribution=tfd.Normal(loc=0, scale=1),
+        optimizer=optimizers.Adam(learning_rate=0.0001),
+        # kwds:
+        model_type=ModelType.INTER,
+        top_layer=layer_nonneg_lin(units=1),
+    )
+else:
+    raise NotImplementedError
+
 neat_model.summary()
 
 

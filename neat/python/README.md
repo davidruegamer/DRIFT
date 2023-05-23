@@ -1,3 +1,7 @@
+### NEAT Python
+This folder contains the Python implementation of NEAT, including a toy examples and a hyperparameter search 
+implementation.
+
 ### Getting started
 
 To ensure reproducibility, we are using [poetry](https://python-poetry.org/) to manage dependencies. 
@@ -11,10 +15,11 @@ poetry install
 To test the installation, run the following command:
 
 ```bash
-poetry run python main.py
+poetry run python toy.py
 ```
 
-You should see a summary of a sample model.
+You should see a summary of a model, as well as a plot showing the monotonic transformation functions for 
+three different model implementations.
 
 Poetry automatically creates a virtual environment for the project.
 When developing in an IDE, make sure to select the interpreter in the virtual environment.
@@ -25,3 +30,7 @@ poetry env info -p
 ```
 
 Further, you need to ensure that the `neat/python` folder in contained in the `PYTHONPATH` environment variable.
+
+### Using requirements.txt
+Alternatively, you can install the dependencies using the `requirements.txt` file to reproduce the environment.
+
