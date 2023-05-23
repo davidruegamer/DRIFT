@@ -8,8 +8,6 @@ The Python implementation further contains the hyperparameter search described i
 
 The folder `benchmarks` contains the code to run the benchmarks mentioned in the paper, including the code to preprocess the data.
 
-The folder `application` contains the code used in the `Covid`, `Elec`, `Wine` and `Yeast` experiments.
+The folder `application` contains the code used in the `Covid`, `Elec`, `Wine`, `Survival`, and `Yeast` experiments.
 
 Code shared between the different experiments can be found in the folder `common`.
-
-The `simulation` folder contains an additional simulation study used while developing the model.
