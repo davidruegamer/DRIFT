@@ -169,7 +169,6 @@ def get_neat_model(
 
 
 def fit(epochs, train_data, val_data, **params):
-
     neat_model = get_neat_model(dim_features=train_data[0].shape[1], **params)
 
     callback = EarlyStopping(

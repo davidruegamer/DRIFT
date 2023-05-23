@@ -4,8 +4,14 @@ from keras.callbacks import EarlyStopping
 from keras.layers import Dense
 from tensorflow_probability import distributions as tfd
 from scipy.stats import probplot
-from utils import nonneg_tanh_network, get_neat_model, ModelType, feature_specific_network, \
-    layer_nonneg_lin, layer_inverse_exp
+from utils import (
+    nonneg_tanh_network,
+    get_neat_model,
+    ModelType,
+    feature_specific_network,
+    layer_nonneg_lin,
+    layer_inverse_exp,
+)
 
 # Data simulation
 n = 10000
@@ -51,9 +57,17 @@ neat_model.summary()
 
 callback = EarlyStopping(patience=100, monitor="val_logLik", restore_best_weights=True)
 
-neat_model.fit(x=(X, y), y=y, batch_size=400, epochs=500, validation_split=0.1, verbose=True, callbacks=[callback])
+neat_model.fit(
+    x=(X, y),
+    y=y,
+    batch_size=400,
+    epochs=500,
+    validation_split=0.1,
+    verbose=True,
+    callbacks=[callback],
+)
 
-pred_neat = neat_model.predict((X,y))
+pred_neat = neat_model.predict((X, y))
 
 # Plotting
 import matplotlib.pyplot as plt
