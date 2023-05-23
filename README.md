@@ -11,3 +11,5 @@ The folder `benchmarks` contains the code to run the benchmarks mentioned in the
 The folder `application` contains the code used in the `Covid`, `Elec`, `Wine` and `Yeast` experiments.
 
 Code shared between the different experiments can be found in the folder `common`.
+
+The `simulation` folder contains an additional simulation study used while developing the model.
