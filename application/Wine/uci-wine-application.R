@@ -1,6 +1,5 @@
 # DRIFT: POLR NAM for the wine data
 # May 2023
-# Lucas Kook, David Ruegamer
 
 # Dependencies ------------------------------------------------------------
 
