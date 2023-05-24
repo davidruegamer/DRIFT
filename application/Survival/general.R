@@ -1,6 +1,4 @@
-reticulate::use_condaenv("r-reticulate")
-# contains python
-# tensorflow
+#reticulate::use_condaenv("r-reticulate")
 library(tidyverse)
 library(ggplot2)
 library(ggsci)
