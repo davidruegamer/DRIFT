@@ -122,24 +122,37 @@ out <- lapply(0:19, \(split) {
     set = rep(c("train", "test"),  2),
     nll = c(polr_train, polr_test, nam_train, nam_test)
   )
-  list(preds = preds, perf = perf)
+  cfx <- coef(m)
+  list(preds = preds, perf = perf, polr = cfx)
 })
 
 pdat <- bind_rows(lapply(out, `[[`, 1), .id = "split") %>% 
   group_by(split, pred) %>% mutate(bhat = bhat - mean(bhat))
 perf <- bind_rows(lapply(out, `[[`, 2), .id = "split")
+sx <- seq(0, 1, length.out = 1e3)
+plr <- bind_rows(lapply(out, `[[`, 3), .id = "split") %>% 
+  pivot_longer(names_to = "pred", values_to = "coef", x.V1:x.V5) %>% 
+  group_by(split, pred) %>% mutate(bhat = list(data.frame(
+    x = sx, bhat = - coef * sx - mean(-coef * sx)))) %>% 
+  unnest(bhat)
 
 saveRDS(pdat, file.path(odir, "pdat.rds"))
 saveRDS(perf, file.path(odir, "perf.rds"))
 
+col2 <- colorspace::diverge_hcl(2)
+
 ggplot(pdat, aes(x = x, y = bhat, linetype = split)) +
-  geom_line(alpha = 0.6, show.legend = FALSE) +
+  geom_line(alpha = 0.6, aes(color = "DRIFT")) +
+  geom_line(alpha = 0.3, data = plr, aes(color = "POLR")) +
   facet_wrap(~ pred, labeller = as_labeller(
     c("x.V1" = "fixed acidity", "x.V2" = "volatile acidity", "x.V3" = "citric acid", 
       "x.V4" = "residual sugar", "x.V5" = "chlorides")), nrow = 1) +
   theme_bw() +
-  labs(y = "partial effect", x = element_blank()) +
-  theme(text = element_text(size = 13.5), axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
+  labs(y = "partial effect", x = "x", color = element_blank()) +
+  theme(text = element_text(size = 13.5), 
+        axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1)) +
+  guides(linetype = "none") +
+  scale_color_manual(values = c("DRIFT" = col2[1], "POLR" = col2[2]))
 
 ggsave(file.path(odir, "wine.pdf"), width = 10, height = 2.5)
 
