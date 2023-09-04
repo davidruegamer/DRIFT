@@ -127,11 +127,12 @@ out <- lapply(0:19, \(split) {
 })
 
 pdat <- bind_rows(lapply(out, `[[`, 1), .id = "split") %>% 
-  group_by(split, pred) %>% mutate(bhat = bhat - mean(bhat))
+  group_by(split, pred) %>% mutate(bhat = bhat - mean(bhat)) %>% 
+  filter(pred != "x.V5")
 perf <- bind_rows(lapply(out, `[[`, 2), .id = "split")
 sx <- seq(0, 1, length.out = 1e3)
 plr <- bind_rows(lapply(out, `[[`, 3), .id = "split") %>% 
-  pivot_longer(names_to = "pred", values_to = "coef", x.V1:x.V5) %>% 
+  pivot_longer(names_to = "pred", values_to = "coef", x.V1:x.V4) %>% 
   group_by(split, pred) %>% mutate(bhat = list(data.frame(
     x = sx, bhat = - coef * sx - mean(-coef * sx)))) %>% 
   unnest(bhat)
@@ -146,15 +147,15 @@ ggplot(pdat, aes(x = x, y = bhat, linetype = split)) +
   geom_line(alpha = 0.3, data = plr, aes(color = "POLR")) +
   facet_wrap(~ pred, labeller = as_labeller(
     c("x.V1" = "fixed acidity", "x.V2" = "volatile acidity", "x.V3" = "citric acid", 
-      "x.V4" = "residual sugar", "x.V5" = "chlorides")), nrow = 1) +
+      "x.V4" = "residual sugar", "x.V5" = "chlorides")), nrow = 2) +
   theme_bw() +
-  labs(y = "partial effect", x = "x", color = element_blank()) +
-  theme(text = element_text(size = 13.5), 
+  labs(y = "partial effect of x", x = "x", color = element_blank()) +
+  theme(text = element_text(size = 13.5), legend.position = "top",
         axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1)) +
   guides(linetype = "none") +
   scale_color_manual(values = c("DRIFT" = col2[1], "POLR" = col2[2]))
 
-ggsave(file.path(odir, "wine.pdf"), width = 10, height = 2.5)
+ggsave(file.path(odir, "wine.pdf"), width = 5, height = 5.5)
 
 rres <- perf %>% 
   group_by(mod, set) %>% 
