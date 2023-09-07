@@ -138,7 +138,12 @@ plr <- bind_rows(lapply(out, `[[`, 3), .id = "split") %>%
   unnest(bhat)
 
 saveRDS(pdat, file.path(odir, "pdat.rds"))
+saveRDS(plr, file.path(odir, "plr.rds"))
 saveRDS(perf, file.path(odir, "perf.rds"))
+
+# pdat <- readRDS(file.path(odir, "pdat.rds"))
+# plr <- readRDS(file.path(odir, "plr.rds"))
+# perf <- readRDS(file.path(odir, "perf.rds"))
 
 col2 <- colorspace::diverge_hcl(2)
 
@@ -150,12 +155,12 @@ ggplot(pdat, aes(x = x, y = bhat, linetype = split)) +
       "x.V4" = "residual sugar", "x.V5" = "chlorides")), nrow = 2) +
   theme_bw() +
   labs(y = "partial effect of x", x = "x", color = element_blank()) +
-  theme(text = element_text(size = 13.5), legend.position = "top",
+  theme(text = element_text(size = 13.5), legend.position = "right",
         axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1)) +
   guides(linetype = "none") +
   scale_color_manual(values = c("DRIFT" = col2[1], "POLR" = col2[2]))
 
-ggsave(file.path(odir, "wine.pdf"), width = 5, height = 5.5)
+ggsave(file.path(odir, "wine.pdf"), width = 6, height = 5)
 
 rres <- perf %>% 
   group_by(mod, set) %>% 
@@ -163,4 +168,3 @@ rres <- perf %>%
 rres
 
 saveRDS(rres, file.path(odir, "rres.rds"))
-
