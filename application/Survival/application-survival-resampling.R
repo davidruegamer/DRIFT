@@ -14,7 +14,7 @@ fstimes_ped <- fstimes %>%
                                   BoroughName +
                                   PropertyType, 
                                 cut = c(1, 3, 5, 7, 10, 18, seq(25, 1000, by = 35)))
-res <- vector("list", 25L)
+res <- martingale_residuals <- vector("list", 25L)
 set.seed(8)
 for (i in 1:25) {
   set.seed(i)
@@ -56,9 +56,9 @@ for (i in 1:25) {
     verbose = FALSE,
     view_metrics = FALSE,
     batch_size = 32,
-    validation_split = 0#,
-   #callbacks = list(callback_reduce_lr_on_plateau(patience = 50, factor = 0.5, min_lr = 0.0001),
-    #                 callback_early_stopping(patience = 250, restore_best_weights = T))
+    validation_split = 0.1,
+    callbacks = list(callback_reduce_lr_on_plateau(patience = 30, factor = 0.5, min_lr = 0.0001),
+                     callback_early_stopping(patience = 75, restore_best_weights = T))
   )
   
   eval_ints <- get_eval_intervals(fstimes, "status", "surv_times")
@@ -103,11 +103,26 @@ for (i in 1:25) {
   test_data <- data.frame(time = fstimes$surv_times[test_id], 
                           status = fstimes$status[test_id])
   ours <- rgs_score(surv_probs, as.data.frame(test_data), 
-            eval_ints$eval_ints, at = eval_ints$quartiles)
+                    eval_ints$eval_ints, at = eval_ints$quartiles)
   PAM <- rgs_score(s_pam, as.data.frame(test_data), 
-            eval_ints$eval_ints, at = eval_ints$quartiles)
+                   eval_ints$eval_ints, at = eval_ints$quartiles)
   KM <- rgs_score(s_km, as.data.frame(test_data), 
-                 eval_ints$eval_ints, at = eval_ints$quartiles)
+                  eval_ints$eval_ints, at = eval_ints$quartiles)
   res[[i]] <- list(ours = ours, PAM = PAM, KM = KM)
+  
+  #martingale residuals
+  cumhaz <- - log(surv_probs)
+  cumhaz_pam <- - log(s_pam)
+  martingale <- martingale_pam <- rep(0, length(test_data$time))
+  for (s in 1:length(martingale)) {
+    when <- which.min((eval_ints$eval_ints - test_data$time[s])^2)
+    martingale[s] <- test_data$status[s] - cumhaz[s, when]
+    martingale_pam[s] <- test_data$status[s] - cumhaz_pam[s, when]
+  }
+  martingale_residuals[[i]] <- list(ours = martingale, pam = martingale_pam) 
 }
+
+saveRDS(res, "results/res.Rds")
+saveRDS(martingale_residuals, "results/martingales.Rds")
+
 
