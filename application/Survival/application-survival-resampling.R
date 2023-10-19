@@ -17,7 +17,6 @@ fstimes_ped <- fstimes %>%
 res <- martingale_residuals <- vector("list", 25L)
 set.seed(8)
 for (i in 1:25) {
-  print(i)
   set.seed(i)
   train_id <- sample(1:nrow(fstimes), round(0.8 * nrow(fstimes)))
   test_id <- setdiff(1:nrow(fstimes), train_id)
