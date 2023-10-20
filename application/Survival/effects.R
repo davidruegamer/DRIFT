@@ -145,3 +145,65 @@ p4 <- ggplot(test_grid_coords_pam, aes(.x, .y, z = pred)) +
         legend.position = "bottom") +
   guides(fill = guide_legend("Partial Effect"))
   
+test_grid_surv <- fstimes_surv[c(1:4000, 1:5000), ] %>%
+  mutate(timenumeric = rep(c(4, 6, 8, 11, 13, 15, 18, 20, 23), each = 1000L), 
+         Northing_m = 0, Easting_m = 0) %>%
+  mutate(BoroughName_i = 0, WardName_i = 0, PropertyType_i = 0) %>%
+  mutate(BoroughName = fstimes_surv$BoroughName[1], 
+         WardName = fstimes_surv$WardName[1], 
+         PropertyType = fstimes_surv$PropertyType[1],
+         method = "DRIFT",
+         obs = rep(1:9, each = 1000L)) %>%
+  mutate(timenumeric = (timenumeric - 
+                          mean(fstimes$timenumeric)) / sd(fstimes$timenumeric))
+test_grid_surv$surv[, 1] <- rep(seq(min(fstimes_surv$surv[, 1]), 
+                                    max(fstimes_surv$surv[, 1]),
+                                    length.out = 1000L), 9)
+test_grid_surv$surv[, 2] <- 1
+test_grid_surv$sp <- 1 - predict(neat, test_grid_surv, type = "cdf")
+test_grid_surv <- test_grid_surv %>%
+  select(method, timenumeric, sp, obs)
+
+test_grid_surv_pam <- fped[1:9000, ] %>% 
+  mutate(tend = rep(seq(min(fstimes_surv$surv[, 1]), max(fstimes_surv$surv[, 1]), 
+                        length.out = 1000L), 9),
+         timenumeric = rep(c(4, 6, 8, 11, 13, 15, 18, 20, 23), each = 1000L), 
+         .x = 0, .y = 0, 
+         offset = 0,
+         BoroughName = fped$BoroughName[1], 
+         PropertyType = fped$PropertyType[1],
+         method = "PAM",
+         obs = rep(1:9, each = 1000)) 
+test_grid_surv_pam$pred <- predict(pam, test_grid_surv_pam, type = "response")
+test_grid_surv_pam <- test_grid_surv_pam %>%
+  select(method, timenumeric, pred, obs, tend) %>%
+  group_by(obs) %>% mutate(t_diff = tend - dplyr::lag(tend, 1, default = 0)) %>%
+  mutate(sp = exp(-cumsum(.data$pred * .data$t_diff))) %>%
+  select(method, timenumeric, sp, obs)
+
+test_grid_surv_joined <- rbind(test_grid_surv, test_grid_surv_pam) %>%
+  mutate(followup = rep(rep(seq(min(fstimes_surv$surv[, 1]), 
+                                max(fstimes_surv$surv[, 1]), 
+                                length.out = 1000L), 9), 2)) %>%
+  mutate(method = factor(method, levels = c("PAM", "DRIFT")))
+obsnames <- c("1" = "4 AM", "2" = "6 AM", "3" = "8 AM", "4" = "11 AM", "5" = "1 PM", 
+              "6" = "3 PM", "7" = "6 PM", "8" = "8 PM", "9" = "11 PM")
+obsnames2 <- c("1" = "4", "2" = "6", "3" = "8", "4" = "11", "5" = "13", 
+               "6" = "15", "7" = "18", "8" = "21", "9" = "23")
+test_grid_surv_joined$daytime <- as.numeric(obsnames2[test_grid_surv_joined$obs]) + 0.0
+
+pq <- ggplot(test_grid_surv_joined %>% 
+               filter(daytime %in% c(4, 13, 15, 21)),
+             aes(followup, sp)) + 
+  geom_line(aes(col = factor(obs))) + facet_wrap(method ~ .) + 
+  theme_bw() +
+  xlab("follow-up time (seconds)") +
+  ylab("S(t)") +
+  scale_y_continuous(breaks = seq(0, 1, by = .5)) +
+  theme(legend.position =  "right", text = element_text(size = 15.5), 
+        plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 30, vjust = 0.5, hjust=1)) 
+pq
+
+saveRDS(test_grid_surv_joined, "results/plotframe.Rds")
+
