@@ -1,3 +1,11 @@
+######################## Initialization #############################
+# custom_initializer <- function(shape, fan_max = 1024, dtype=NULL) {
+#   fan_in <- shape[[1]]  # Assuming a dense layer; shape is c(input_dim, output_dim)
+#   scale <- sqrt(9 / (max(fan_in, fan_max)^2))
+#   random_vals <- runif(prod(shape), min = 0, max = scale)
+#   return(array(random_vals, dim = shape))
+# }
+
 ######################## Networks #############################
 ### Generic function to built an MLP
 #' 
@@ -81,26 +89,23 @@ semi_structured_nams <- function(size_nam = c(64,64,32),
 ### Special layer for monotonocity
 layer_nonneg_tanh <- function(...) layer_dense(..., activation = "tanh", 
                                                kernel_constraint = 
-                                                 keras$constraints$non_neg(),
-                                               kernel_initializer = 
-                                                 keras$initializers$random_uniform(minval = 0, 
-                                                                                   maxval = 0.01))
+                                                 keras$constraints$non_neg(), 
+                                               kernel_initializer = keras$initializers$random_uniform(minval = 0, 
+                                                                                                      maxval = 0.01))
 
 layer_nonneg_lin <- function(...) layer_dense(..., activation = "linear", 
                                               kernel_constraint = 
-                                                keras$constraints$non_neg(),
-                                              kernel_initializer = 
-                                                keras$initializers$random_uniform(minval = 0, 
-                                                                                  maxval = 0.01),
+                                                keras$constraints$non_neg(), 
+                                              kernel_initializer = keras$initializers$random_uniform(minval = 0, 
+                                                                                                     maxval = 0.01),
                                               use_bias = FALSE
 )
 
 layer_nonneg_lin_bias <- function(...) layer_dense(..., activation = "linear", 
                                                    kernel_constraint = 
-                                                     keras$constraints$non_neg(),
-                                                   kernel_initializer = 
-                                                     keras$initializers$random_uniform(minval = 0, 
-                                                                                       maxval = 0.01),
+                                                     keras$constraints$non_neg(), 
+                                                   kernel_initializer = keras$initializers$random_uniform(minval = 0, 
+                                                                                                          maxval = 0.01),
                                                    use_bias = TRUE
 )
 

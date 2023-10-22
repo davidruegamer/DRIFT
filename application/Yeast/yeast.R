@@ -12,6 +12,10 @@ if(!require(mixdistreg)){
   install_github("neural-structured-additive-learning/mixdistreg")
   library(mixdistreg)
 }
+if(!require(deeptrafo)){
+  install_github("neural-structured-additive-learning/deeptrafo")
+  library(deeptrafo)
+}
 load_all("../../neat/R")
 
 set.seed(42)
@@ -63,7 +67,7 @@ mod <- sammer(y = y_train,
               tf_seed = 3
 )
 
-if(!file.exists(weights_mixtmod.hdf5)){
+if(!file.exists("weights_mixtmod.hdf5")){
   
   # model fitting
   mod %>% fit(epochs = 2000, 
@@ -147,16 +151,28 @@ gg1
 #   facet_wrap(~ name, ncol = 3)
 # 
 
-ggsave(file = "yeast_mm.pdf", width = 5, height = 4)
-ggsave(file = "yeast_mm_2.pdf", width = 8, height = 7)
+# ggsave(file = "yeast_mm.pdf", width = 5, height = 4)
+# ggsave(file = "yeast_mm_2.pdf", width = 8, height = 7)
 
 ### NEAT model
 
+feature_net <- function(x) x %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = TRUE) %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = TRUE) %>% 
+  layer_dense(units = 1, use_bias = TRUE)
+
+feature_net_pos <- function(x) x %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = TRUE) %>% 
+  layer_dense(units = 64, activation = "relu", use_bias = TRUE) %>% 
+  layer_dense(units = 1, activation = "relu", use_bias = TRUE)
+
 # Train the model
-mod_neat_ls <- neat(1, type = "ls", 
-                    net_y_size_trunk = nonneg_tanh_network(c(128, 128, 32)),
-                    net_x_arch_trunk = relu_network(c(128, 128)),
-                    optimizer = optimizer_adam())
+mod_neat_ls <- deeptrafo(formula = y | snamIA(time) ~ 1 + snam(time), 
+                         data = data.frame(y = y_train[,1], 
+                                           time = X_train[,1]),
+                         list_of_deep_models = list(snam = feature_net,
+                                                    snamIA = feature_net_pos),
+                         order = 30)
 
 if(file.exists("weights_neat.hdf5")){
   
@@ -164,14 +180,15 @@ if(file.exists("weights_neat.hdf5")){
   
 }else{
   
-  mod_neat_ls %>% fit(x = list(X_train,y_train), 
-                      y = y_train, 
-                      batch_size = 32L, epochs = 50L,
-                      validation_split = 0.1, view_metrics = FALSE, 
-                      callbacks = callback_early_stopping(
-                        patience = 5, 
-                        monitor="val_logLik",
-                        restore_best_weights = TRUE)
+  # set.seed(42)
+  # ranind <- sample(1:nrow(X_train))
+  
+  mod_neat_ls %>% fit(batch_size = 32L, epochs = 1000L,
+                      validation_split = 0.1,
+                      early_stopping = TRUE,
+                      patience = 10,
+                      view_metrics = FALSE, 
+                      verbose = T
   )
   
   save_model_weights_hdf5(mod_neat_ls, filepath="weights_neat.hdf5")
@@ -179,11 +196,13 @@ if(file.exists("weights_neat.hdf5")){
 }
   
 # Make predictions on test set
-pred_neat_ls <- mod_neat_ls %>% predict(list(X_test,y_test))
-- mod_neat_ls$evaluate(list(X_test, y_test), y_test) 
+- (mod_neat_ls %>% logLik(newdata = data.frame(time = X_test[,1],
+                                              y = y_test[,1])) / nrow(X_test))
 
 # plot per time (discrete)
 # time_level = sort(as.vector(unique(X_train)))
+pred_neat_ls <- mod_neat_ls %>% predict(newdata = data.frame(time = X_test[,1],
+                                                             y = y_test[,1]))
 df = data.frame(y_test = y_test, y_pred = pred_neat_ls, time = X_test)
 # df$time_lev <- NA
 # for(i in seq_along(time_level)) {
@@ -199,41 +218,28 @@ gg2 <- ggplot(data = df, aes(x = y_test, y = y_pred)) +
 
 gg2
 
-ggsave(file = "yeast_res.pdf", width = 5, height = 4)
-ggsave(file = "yeast_res_2.pdf", width = 8, height = 7)
+# ggsave(file = "yeast_res.pdf", width = 5, height = 4)
+# ggsave(file = "yeast_res_2.pdf", width = 8, height = 7)
 
 ## pdf
 
-plotdf <- expand.grid(time = seq(min(X_test), max(X_test), l=100),
+plotdf <- expand.grid(time = seq(min(X_test), max(X_test), l=1000),
                       y = seq(quantile(y_test, 0.001), quantile(y_test, 0.999), l=1000))
 
-with(tf$GradientTape(persistent = TRUE) %as% tape, {
-  
-  x <- tf$convert_to_tensor(plotdf$time, dtype = tf$float32)
-  y <- tf$convert_to_tensor(plotdf$y, dtype = tf$float32)
-
-  tape$watch(x)
-  tape$watch(y)
-  
-  # Feed forward
-  h <- mod_neat_ls(list(x,y), training = FALSE)
-  
-  # Gradient and the corresponding loss function
-  h_prime = tape$gradient(h, y)
-  
-})
-
-pdf <- tfd_normal(0,1)$prob(h) %>% as.matrix + as.matrix(h_prime)
+pdf <- mod_neat_ls %>% predict(newdata = plotdf, type = "pdf")
 dfpdf_neat <- data.frame(time = plotdf$time, 
                          dens_y = pdf[,1], 
                          y = plotdf$y)
 
 gg3 <- ggplot() + 
-  geom_joy(data = dfpdf_neat %>% filter(time %in% quantile(dfpdf_neat$time, seq(0,1,l=10))), 
-           aes(height = dens_y*5, x = y + time/125 * 5, y = time, 
+  geom_joy(data = dfpdf_neat %>% filter(time %in% quantile(dfpdf_neat$time, seq(0,1,l=100))) %>% 
+             mutate(
+               dummy = "DRIFT"
+             ), 
+           aes(height = dens_y * 7, x = y + time/125 * 7, y = time, 
                group = time, fill = time), 
-           stat="identity", alpha = 0.7, colour = rgb(0,0,0,0.7)) +
-  theme_bw() + ylab("Time") + xlab("") + 
+           stat="identity", alpha = 0.7, colour = rgb(0,0,0,0.4)) +
+  theme_bw() + facet_grid(~ dummy) + ylab("Time") + xlab("") + 
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         # panel.spacing = unit(-1.5, "lines"),
@@ -243,15 +249,30 @@ gg3 <- ggplot() +
         legend.position = "none",
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
-        rect = element_rect(fill = "transparent"))
+        rect = element_rect(fill = "transparent")) 
 
 gg3
 
 library(gridExtra)
 
 lay <- rbind(
-  c(1,2),
-  c(1,3))
+  c(1,1,1,1),
+  c(1,1,1,1),
+  c(NA,3,3,NA),
+  c(NA,3,3,NA)
+  )
 
-g <- grid.arrange(gg1, gg3, gg2, layout_matrix = lay)
-ggsave(file = "yeast_matrix_fig.pdf", g, width = 8, height = 4)
+g <- grid.arrange(gg1, gg3, layout_matrix = lay)
+ggsave(file = "yeast_matrix_fig.pdf", g, width = 6, height = 6)
+
+lay <- rbind(
+  c(1,1,NA),
+  c(1,1,2),
+  c(1,1,2),
+  c(1,1,2),
+  c(1,1,NA))
+
+g <- grid.arrange(gg1, gg3, layout_matrix = lay)
+ggsave(file = "yeast_matrix_fig2.pdf", g, width = 6, height = 4)
+
+

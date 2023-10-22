@@ -1,4 +1,4 @@
-reticulate::use_condaenv("r-reticulate")
+# reticulate::use_condaenv("r-reticulate")
 # contains python
 # tensorflow
 library(tidyverse)
@@ -16,7 +16,7 @@ library(pammtools)
 library(keras)
 source("helpers.R")
 
-fstimes <- readRDS("application/Survival/data/fstimes.Rds")
+fstimes <- readRDS("data/fstimes.Rds")
 fstimes$surv_times <- fstimes$S[, 1]
 fstimes$status <- fstimes$S[, 2]
 fstimes$status <- ifelse(fstimes$surv_times > 1000, 0, 1)

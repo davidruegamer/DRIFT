@@ -94,6 +94,19 @@ if(file.exists("weights_str.hdf5")){
 plotdata_str <- plot(mod_str, only_data = TRUE)
 saveRDS(plotdata_str, file = "plotdata_str.RDS")
 
+state_df <- map_data("state")
+county_df <- map_data("county")
+
+prplot <- county_df %>% select(lat, long) %>%
+  rename(latitude = lat, longitude = long)
+
+spatial_effect <- mod_str %>% get_partial_effect(names = "te(latitude, longitude)",
+                                                 newdata = cbind(data.frame(date=0, population=0),
+                                                                 prplot, 
+                                                                 data.frame(temp=0, humid=0)))
+
+saveRDS(spatial_effect, file = "plotspatial_str.RDS")
+
 rm(plotdata_str); gc(); gc()
 rm(mod_str); gc(); gc()
 

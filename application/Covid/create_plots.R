@@ -46,20 +46,22 @@ plotdata_uni <- do.call("rbind",
                         ))
 
 gg1 <- ggplot(plotdata_uni %>%
-         mutate(model = factor(model, levels = unique(model),
-                               labels = c("NAM", "DRAFT", "GAM"))) %>% 
+         mutate(model = factor(model, levels = unique(model)[c(1,3,2)],
+                               labels = c("GAM (Neural Basis)", "GAM (Spline Basis)", "DRIFT"))) %>% 
          group_by(model, var) %>%
          mutate(pe = pe-mean(pe)) %>%
          ungroup %>% sample_n(1000000),
        aes(x = x, y = pe, colour = model)) +
   geom_line(linewidth=1.2) + facet_wrap(~var, scale="free", ncol = 2) +
-  theme_bw() + xlab("Value") +
-  ylab("Partial Effect") + theme(text = element_text(size = 14),
+  theme_bw() + xlab("value") +
+  ylab("partial effect") + theme(text = element_text(size = 15.5),
                                  legend.title = element_blank()) +
   scale_colour_manual(values = c("#009E73", "#999999", "#CC79A7")) +
-  theme(legend.position="bottom")
+  theme(legend.position="top")
 
-ggsave(filename = "uni_effect.pdf", width = 6, height = 5)
+gg1
+
+# ggsave(filename = "uni_effect.pdf", width = 6, height = 5.5)
 
 
 # spatial
@@ -108,7 +110,7 @@ ggmap(myMap) + # xlab("Longitude") + ylab("Latitude") +
                          name = "") +
   guides(alpha = "none", size = "none") + # ggtitle("Geographic Location Effect") +
   theme(plot.title = element_text(hjust = 0.5),
-        text = element_text(size=14),
+        text = element_text(size=15.5),
         axis.title.x=element_blank(),
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
@@ -120,12 +122,17 @@ ggmap(myMap) + # xlab("Longitude") + ylab("Latitude") +
         ) +
   facet_wrap(~ model, ncol = 2)
 
-ggsave(file = "spatial.jpeg", device = "jpeg"#,
-       #width = 7, height = 5.5
-       )
+# ggsave(file = "spatial.jpeg", device = "jpeg",
+#        width = 6, height = 5.5
+#        )
 
 effect <- readRDS("plotspatial_neat.RDS")[,4]
-county_df$eff <- effect - mean(effect)
+county_df$DRIFT <- effect - mean(effect)
+effectgam <- readRDS("plotspatial_str.RDS")[,1]
+county_df$GAM <- effectgam - mean(effectgam) 
+# make plots more readable
+county_df$GAM[county_df$GAM < min(county_df$DRIFT)] <- min(county_df$DRIFT)
+county_df <- county_df %>% pivot_longer(DRIFT:GAM)
 
 state_df_proj <- map_data("state", projection = "albers", parameters = c(39, 45))
 state_df <- state_df %>% left_join(state_df_proj, by = c("group", "order"))
@@ -133,23 +140,29 @@ county_df_proj <- map_data("county", projection = "albers", parameters = c(39, 4
 county_df <- county_df %>% left_join(county_df_proj, by = c("group", "order"))
 
 gg2 <- ggplot(county_df, aes(long.y, lat.y, group = group)) +
-  geom_polygon(aes(fill = eff), colour = alpha("white", 0.1), size = 0.12) +
+  geom_polygon(aes(fill = value), colour = alpha("white", 0.1), size = 0.12) +
   geom_polygon(data = state_df, colour = "white", fill = NA) +
   coord_fixed() +
   theme_minimal() +
   theme(axis.line = element_blank(), axis.text = element_blank(),
         axis.ticks = element_blank(), axis.title = element_blank()) +
   scale_fill_viridis_c(option = 'mako', direction = -1,
-                         name = "") +
-  theme(legend.position = "bottom",
-        legend.key.width=unit(1.6,"cm"),
-        text = element_text(size = 16))
+                         name = "partial effect") +
+  theme(legend.position = "right",
+        legend.title = element_text(margin = margin(t = 0, r = 0, b = 10, l = 0)),
+        # legend.margin=margin(0, -35, 0, 0),
+        legend.key.height=unit(1.6,"cm"),
+        text = element_text(size = 15.5)) + 
+  facet_grid(name~., switch = "both")
 
-gg2 + theme(plot.margin = unit(rep(1, 4), "cm"))
+gg2 + theme(plot.margin = unit(c(0,-0,-0, -0), "cm"))
 
-ggsave(file = "spatial_draft.pdf"#, device = "jpeg"#,
-       #width = 7, height = 5.5
+# ggsave(file = "spatial_drift.pdf", #device = "jpeg"#,
+#        width = 6, height = 5.5
+# )
+
+(g1 <- gridExtra::grid.arrange(gg1 + theme(plot.margin = unit(c(0,4,1,4), "cm")), 
+                               gg2 + theme(plot.margin = unit(rep(0,4), "cm")), 
+                              ncol=1, heights = c(1,1))#, widths=c(1.3,1))
 )
-
-g1 <- gridExtra::grid.arrange(gg1, gg2, ncol=2, widths=c(1.3,1))
-ggsave(file = "covid_matrix_fig.pdf", g1, width = 8, height = 4)
+# ggsave(file = "covid_matrix_fig.pdf", g1, width = 6, height = 11)
